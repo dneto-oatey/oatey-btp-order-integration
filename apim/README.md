@@ -1,42 +1,35 @@
 # API Management
 
-This directory contains all SAP API Management artifacts and configurations.
+Week 1 APIM foundation for the approved Oatey SAP BTP inbound sales order architecture.
 
-## Contents
+## API Products
 
-- **API Subscriptions** - Consumer API product definitions
-- **Policies** - Authentication, rate limiting, and quota policies
-- **Developer Portal** - Documentation and consumer onboarding
-- **Analytics** - API consumption tracking and monitoring
+| Product | Consumer | Pattern | Base Path | Target |
+| --- | --- | --- | --- | --- |
+| REP_PORTAL_API | Sales Rep Portal | Sync | /api/v1/portal/sales-orders | Standard SAP Sales Order API |
+| EDL_SALES_ORDER_INBOUND_API | EDI Translator | Async | /api/v1/sales-orders | IFL_SO_INBOUND |
+| CONSUMER_A_API | Future partners | Async | /api/v1/sales-orders | IFL_SO_INBOUND |
 
-## Consumer API Products
+## Proxies
 
-### REP_PORTAL_API
-- Sales Rep Portal synchronous integration
-- OAuth 2.0 authentication
-- Rate limit: [To be defined]
-
-### EDL_SALES_ORDER_INBOUND_API
-- Epicor HQ / EDI Translator asynchronous integration
-- OAuth / API Key authentication
-- Rate limit: [To be defined]
-
-### CONSUMER_A_API
-- Template for future partner integrations
-- OAuth authentication
-- Rate limit: [To be defined]
-
-## Policies
-
-- `AuthenticationPolicy` - OAuth 2.0 validation
-- `RateLimitPolicy` - Consumer-specific rate limiting
-- `QuotaPolicy` - Daily/monthly quotas per consumer
-- `AnalyticsPolicy` - Request/response tracking
-
-## Documentation
-
-Consumer API documentation and interactive testing available via API Management Developer Portal.
-
-## Configuration
-
-See implementation guides in `/implementation` for API setup and policy configuration.
+- sales-rep-portal-v1 -> openapi/sales-rep-portal-api.yaml
+- - sales-order-inbound-v1 -> openapi/sales-order-inbound-api.yaml
+  - - callback-notification-v1 -> openapi/callback-notification-api.yaml
+   
+    - ## Policies
+   
+    - - OAuth 2.0 or approved API key.
+      - - Consumer authorization by API product.
+        - - Quota, rate limit, and spike arrest per consumer.
+          - - Required Idempotency-Key and X-Consumer-ID headers.
+            - - X-Correlation-ID pass-through to downstream runtime.
+              - - Analytics by consumer, status code, latency, and API product.
+               
+                - ## Environment Strategy
+               
+                - DEV is for contract build, QA is for integrated validation, and PROD is for controlled production traffic. Hostnames, credentials, destinations, quotas, and rate limits are environment configuration, not source code.
+               
+                - ## Out of Scope
+               
+                - APIM does not perform mapping, orchestration, retry, DLQ handling, persistence, CAP, PostgreSQL, Event Mesh, or UI.
+                - 
