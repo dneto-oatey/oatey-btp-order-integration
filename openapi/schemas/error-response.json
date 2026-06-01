@@ -1,0 +1,13 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Error Response",
+  "type": "object",
+  "required": ["code", "message", "correlationId"],
+  "properties": {
+    "code": { "type": "string" },
+    "message": { "type": "string" },
+    "field": { "type": "string" },
+    "correlationId": { "type": "string" },
+    "errorCategory": { "type": "string", "enum": ["VALIDATION", "BUSINESS_RULE", "TRANSIENT", "SYSTEM", "AUTHENTICATION"] }
+  }
+}
