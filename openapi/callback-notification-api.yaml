@@ -1,0 +1,25 @@
+openapi: 3.0.3
+info:
+  title: Oatey Sales Order Callback Notification API
+  version: 1.0.0
+  description: Consumer callback contract for asynchronous sales order processing results.
+paths:
+  /consumer-callback-url:
+    post:
+      summary: Receive sales order processing confirmation
+      operationId: receiveSalesOrderConfirmation
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: './schemas/callback-payload.json'
+      responses:
+        '200':
+          description: Callback received
+        '202':
+          description: Callback accepted
+        '400':
+          description: Invalid callback payload
+        '500':
+          description: Consumer endpoint failure; CPI retry applies
