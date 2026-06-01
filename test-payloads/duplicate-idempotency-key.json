@@ -1,0 +1,14 @@
+{
+    "externalOrderId": "EDI-ORDER-0001",
+    "sourceSystem": "EDI_TRANSLATOR",
+    "idempotencyKey": "EDI-ORDER-0001",
+    "soldToParty": "10000001",
+    "shipToParty": "10000001",
+    "currency": "USD",
+    "items": [{
+          "lineNumber": "10",
+          "material": "MAT-1000",
+          "quantity": 1,
+          "unitOfMeasure": "EA"
+    }]
+}
