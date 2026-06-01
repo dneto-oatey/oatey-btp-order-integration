@@ -1,0 +1,36 @@
+{
+  "SalesOrderType": "ZOR",
+  "SalesOrganization": "1201",
+  "DistributionChannel": "10",
+  "OrganizationDivision": "00",
+  "SoldToParty": "0001011417",
+  "PurchaseOrderByCustomer": "P1297405",
+  "CustomerPurchaseOrderType": "EDI",
+  "CustomerPurchaseOrderDate": "2025-04-16T00:00:00",
+  "SalesOrderDate": "2025-04-16T00:00:00",
+  "PricingDate": "2025-04-16T00:00:00",
+  "RequestedDeliveryDate": "2025-04-18T00:00:00",
+  "IncotermsClassification": "PPD",
+  "to_Item": {
+    "results": [
+      {
+        "UnderlyingPurchaseOrderItem": "1",
+        "Material": "31135",
+        "MaterialByCustomer": "35420",
+        "PricingDate": "2025-04-16T00:00:00",
+        "RequestedQuantity": "6",
+        "RequestedQuantityUnit": "EA",
+        "ZZ1_OriginalOrderQuant_SDI": "6",
+        "ZZ1_OriginalOrderQuant_SDIU": "EA"
+      }
+    ]
+  },
+  "to_Text": {
+    "results": [
+      {
+        "LongTextID": "Z015",
+        "LongText": "Purchase Order Note TEXT FFA REFERENCE OUR PO# ON ALL DOCUMENTS."
+      }
+    ]
+  }
+}
