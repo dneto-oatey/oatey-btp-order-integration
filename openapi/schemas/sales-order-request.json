@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "title": "SAP Sales Order Request",
-  "description": "Schema baseline for the inbound POC using real SAP Sales Order API JSON payloads from K-Cimarron Lumber and Affiliated Dist.",
+  "description": "Schema baseline for the inbound POC using real SAP Sales Order API JSON payloads from K-Cimarron Lumber and Affiliated Dist. SAP date-time values are expected in local timestamp format such as 2025-04-16T00:00:00.",
   "type": "object",
   "additionalProperties": true,
   "required": [
@@ -49,19 +49,19 @@
     },
     "CustomerPurchaseOrderDate": {
       "type": "string",
-      "format": "date-time"
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}$"
     },
     "SalesOrderDate": {
       "type": "string",
-      "format": "date-time"
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}$"
     },
     "PricingDate": {
       "type": "string",
-      "format": "date-time"
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}$"
     },
     "RequestedDeliveryDate": {
       "type": "string",
-      "format": "date-time"
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}$"
     },
     "IncotermsClassification": {
       "type": "string",
@@ -102,7 +102,7 @@
               },
               "PricingDate": {
                 "type": "string",
-                "format": "date-time"
+                "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}$"
               },
               "RequestedQuantity": {
                 "type": "string",
