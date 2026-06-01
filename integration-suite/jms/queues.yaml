@@ -1,0 +1,18 @@
+queues:
+  - name: JMS_SO_INBOUND
+    purpose: Durable inbound sales order queue for asynchronous consumers
+    persistence: enabled
+    ttl: 7d
+    maxRetriesBeforeDlq: 3
+    deadLetterQueue: DLQ_SO_INBOUND
+    retryBackoff:
+      - attempt: 1
+        delaySeconds: 5
+      - attempt: 2
+        delaySeconds: 25
+      - attempt: 3
+        delaySeconds: 125
+  - name: DLQ_SO_INBOUND
+    purpose: Failed inbound sales order messages requiring manual intervention
+    alertWhenDepthGreaterThan: 0
+    auditCadence: monthly
