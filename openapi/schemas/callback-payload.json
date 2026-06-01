@@ -1,0 +1,24 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Sales Order Callback Payload",
+  "type": "object",
+  "required": ["correlationId", "status", "consumerId", "processingTimestamp"],
+  "properties": {
+    "correlationId": { "type": "string", "format": "uuid" },
+    "status": { "type": "string", "enum": ["SUCCESS", "FAILED", "PARTIAL"] },
+    "salesOrderNumber": { "type": "string" },
+    "consumerId": { "type": "string" },
+    "processingTimestamp": { "type": "string", "format": "date-time" },
+    "errors": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "code": { "type": "string" },
+          "field": { "type": "string" },
+          "message": { "type": "string" }
+        }
+      }
+    }
+  }
+}
