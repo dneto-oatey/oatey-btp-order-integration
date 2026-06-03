@@ -2,100 +2,85 @@
 
 ## Scope
 
-Build-ready script specifications for SAP Integration Suite. These are not deployable source files yet. Scripts must not call S/4HANA, must not persist payloads outside JMS, and must not convert the body to a custom canonical model.
+Build-ready script specifications for SAP Integration Suite. The executable IFL_SO_INBOUND flow uses Groovy-based header and payload validation. It does not include a JSON Schema Validation step.
+
+Scripts must not call S/4HANA, persist payloads, create a canonical model, or mutate the original message body before JMS send.
 
 ## Script Sequence
 
 | Order | Script | Purpose | Body mutation |
 | --- | --- | --- | --- |
-| 1 | GS_ValidateHeaders.groovy | Validate mandatory inbound headers and Content-Type | None |
-| 2 | GS_EnsureCorrelationId.groovy | Preserve or generate correlationId | None |
-| 3 | GS_ExtractMonitoringFields.groovy | Extract SAP payload fields for monitoring and JMS properties | None |
-| 4 | GS_PrepareJmsMessage.groovy | Ensure JMS metadata is complete before publish | None |
-| 5 | GS_BuildErrorContext.groovy | Classify exception and set error fields | Error response path only |
+| 1 | GS_ValidateHeaders.groovy | Validate Content-Type and normalize optional inbound headers | None |
+| 2 | GS_EnsureCorrelationId.groovy | Preserve X-Correlation-ID or generate UUID | None |
+| 3 | GS_ExtractMonitoringFields.groovy | Parse and validate SAP Sales Order JSON; extract monitoring fields | None |
+| 4 | GS_PrepareJmsMessage.groovy | Prepare JMS headers/properties before one-way send | None |
+| 5 | GS_BuildErrorContext.groovy | Classify exception and set controlled error fields | Error path only |
 
 ## GS_ValidateHeaders.groovy
 
-| Input | Source | Required |
+| Input | Source | POC rule |
 | --- | --- | --- |
-| Idempotency-Key | HTTP header | Yes |
-| X-Consumer-ID | HTTP header | Yes |
-| X-Correlation-ID | HTTP header | No |
-| Content-Type | HTTP header | Yes |
+| Content-Type | HTTP header | Mandatory; must contain application/json |
+| Idempotency-Key | HTTP header | Optional; set idempotencyKey to empty when missing |
+| X-Consumer-ID | HTTP header | Optional; set consumerId to UNKNOWN_CONSUMER when missing |
+| X-Correlation-ID | HTTP header | Optional; handled by GS_EnsureCorrelationId.groovy |
 
-| Validation | HTTP status | errorCode |
-| --- | --- | --- |
-| Idempotency-Key missing or blank | 400 | MISSING_IDEMPOTENCY_KEY |
-| X-Consumer-ID missing or blank | 400 | MISSING_CONSUMER_ID |
-| Content-Type does not contain application/json | 400 | INVALID_CONTENT_TYPE |
-| X-Correlation-ID supplied but blank | 400 | INVALID_CORRELATION_ID |
-
-Output properties: idempotencyKey, consumerId, rawContentType, validationStatus HEADER_VALIDATED. Idempotency-Key must never be read from the payload body.
+Controlled error output for invalid Content-Type: errorCode INVALID_CONTENT_TYPE, errorCategory VALIDATION, httpStatus 400.
 
 ## GS_EnsureCorrelationId.groovy
 
 | Condition | Action |
 | --- | --- |
 | X-Correlation-ID present and non-blank | Trim and reuse as correlationId |
-| X-Correlation-ID missing | Generate UUID using standard Java UUID |
-| X-Correlation-ID blank | Raise INVALID_CORRELATION_ID |
+| X-Correlation-ID missing | Generate UUID using java.util.UUID |
 
-Output fields: exchange property correlationId and message header X-Correlation-ID. Body remains unchanged.
+Output fields: exchange property correlationId and message header X-Correlation-ID.
 
 ## GS_ExtractMonitoringFields.groovy
 
-Execution point: after JSON Schema Validation succeeds.
+Execution point: after header validation and correlation setup. This script performs payload validation by parsing the SAP Sales Order JSON.
 
-| Property | JSON field |
-| --- | --- |
-| purchaseOrderByCustomer | PurchaseOrderByCustomer |
-| soldToParty | SoldToParty |
-| itemCount | Size of to_Item.results |
-| salesOrderType | SalesOrderType |
-| salesOrganization | SalesOrganization |
-| distributionChannel | DistributionChannel |
-| incotermsClassification | IncotermsClassification when present |
+Required header-level fields: SalesOrderType, SalesOrganization, DistributionChannel, OrganizationDivision, SoldToParty, PurchaseOrderByCustomer, CustomerPurchaseOrderType, CustomerPurchaseOrderDate, SalesOrderDate, PricingDate, RequestedDeliveryDate, and to_Item.results.
 
-Failure behavior: parsing failure after schema validation is TECHNICAL_ERROR with HTTP 500. Do not publish to JMS if this script fails.
+Required item-level fields: UnderlyingPurchaseOrderItem, Material, PricingDate, RequestedQuantity, RequestedQuantityUnit, and to_PricingElement.results.
+
+Required pricing fields: ConditionType, ConditionQuantity, ConditionRateValue, and ConditionCurrency.
+
+Monitoring properties extracted: purchaseOrderByCustomer, soldToParty, itemCount, salesOrderType, salesOrganization, distributionChannel, and incotermsClassification when present.
+
+Controlled validation errors set errorCode PAYLOAD_VALIDATION_FAILED, errorCategory VALIDATION, httpStatus 422. Malformed JSON sets INVALID_JSON with httpStatus 400.
 
 ## GS_PrepareJmsMessage.groovy
 
-| Required JMS property | Source |
-| --- | --- |
-| correlationId | Exchange property correlationId |
-| idempotencyKey | Exchange property idempotencyKey |
-| consumerId | Exchange property consumerId |
-| purchaseOrderByCustomer | Exchange property purchaseOrderByCustomer |
-| soldToParty | Exchange property soldToParty |
-| itemCount | Exchange property itemCount |
-| inboundReceivedAt | Exchange property inboundReceivedAt |
-| salesOrderType | Exchange property salesOrderType |
-| salesOrganization | Exchange property salesOrganization |
-| distributionChannel | Exchange property distributionChannel |
+This script prepares metadata for the JMS Receiver send. It must keep the body unchanged.
 
-Pre-publish assertion: all required JMS properties exist and are non-blank. The body sent to JMS_SO_INBOUND must equal the original inbound SAP Sales Order JSON.
+| Header or property | Source |
+| --- | --- |
+| X-Correlation-ID | correlationId property |
+| Idempotency-Key | idempotencyKey property, empty allowed |
+| X-Consumer-ID | consumerId property, UNKNOWN_CONSUMER allowed |
+| purchaseOrderByCustomer | Extracted payload property |
+| soldToParty | Extracted payload property |
+| itemCount | Extracted payload property |
+| inboundReceivedAt | Initial runtime property |
+| salesOrderType | Extracted payload property |
+| salesOrganization | Extracted payload property |
+| distributionChannel | Extracted payload property |
+
+Required before JMS send: correlationId, consumerId, purchaseOrderByCustomer, soldToParty, itemCount, inboundReceivedAt, salesOrderType, salesOrganization, and distributionChannel.
 
 ## GS_BuildErrorContext.groovy
 
 | Exception source | errorCategory | errorCode | HTTP status |
 | --- | --- | --- | --- |
-| Missing Idempotency-Key | VALIDATION | MISSING_IDEMPOTENCY_KEY | 400 |
-| Missing X-Consumer-ID | VALIDATION | MISSING_CONSUMER_ID | 400 |
 | Invalid Content-Type | VALIDATION | INVALID_CONTENT_TYPE | 400 |
-| Invalid X-Correlation-ID | VALIDATION | INVALID_CORRELATION_ID | 400 |
 | Malformed JSON | VALIDATION | INVALID_JSON | 400 |
-| JSON schema validation | VALIDATION | PAYLOAD_VALIDATION_FAILED | 422 |
+| Missing SAP Sales Order required field | VALIDATION | PAYLOAD_VALIDATION_FAILED | 422 |
 | JMS Receiver failure | TECHNICAL | JMS_PUBLISH_FAILED | 500 |
 | Unexpected script/runtime failure | TECHNICAL | TECHNICAL_ERROR | 500 |
 
-Output properties: errorCategory, errorCode, errorMessage, validationStatus. Validation status must be REJECTED for validation errors and FAILED for technical errors.
+Output properties: errorCode, errorCategory, errorMessage, httpStatus, and validationStatus. Validation status is REJECTED for validation errors and FAILED for technical errors.
 
-## Script-Level Guardrails
+## Guardrails
 
-| Guardrail | Required behavior |
-| --- | --- |
-| No SAP call | Scripts must not invoke S/4HANA |
-| No persistence | Scripts must not write to files, databases, CAP, or external stores |
-| No canonical mapping | Scripts must not transform to custom canonical model |
-| Original body | Scripts must not mutate body before JMS publish |
-| Header idempotency | Scripts must trust only HTTP Idempotency-Key header |
+No SAP call, no payload persistence, no canonical mapping, no body mutation before JMS send, and no Event Mesh, CAP, PostgreSQL, UI, RFC, BAPI, or custom Z service.
