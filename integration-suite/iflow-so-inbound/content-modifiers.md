@@ -1,111 +1,181 @@
-# IFL_SO_INBOUND Content Modifier Definitions
+# IFL_SO_INBOUND Content Modifier Matrix
 
 ## Scope
 
-Build-only SAP Integration Suite specification. Source of truth is integration-suite/iflow-so-inbound/design.md. The iFlow preserves the original SAP Sales Order JSON and publishes it to JMS_SO_INBOUND only after header and schema validation pass.
+Build-ready SAP Integration Suite Content Modifier specification for IFL_SO_INBOUND. Source of truth remains integration-suite/iflow-so-inbound/design.md. The original SAP Sales Order JSON body must be preserved until successful publish to JMS_SO_INBOUND.
+
+Supported Source Types: Constant, Header, Property, Expression, XPath, JSONPath.
 
 ## Modifier Sequence
 
-| Order | Name | Runs when | Body behavior |
-| --- | --- | --- | --- |
-| 1 | CM_SetInitialProperties | Immediately after HTTPS Sender | Preserve original body |
-| 2 | CM_SetHeaderValidationContext | Before header Groovy validation | Preserve original body |
-| 3 | CM_SetGeneratedCorrelationId | After valid headers | Preserve original body |
-| 4 | CM_SetPayloadValidationStatus | After JSON schema validation | Preserve original body |
-| 5 | CM_SetJmsHeaders | Before JMS Receiver | Preserve original body |
-| 6 | CM_SetAckResponse | Only after JMS publish success | Replace body with ACK JSON |
-| 7 | CM_SetValidationErrorResponse | Validation exception path | Replace body with error JSON |
-| 8 | CM_SetTechnicalErrorResponse | Technical exception path | Replace body with error JSON |
+| Order | Content Modifier | CPI tab used | Runs when | Body behavior |
+| --- | --- | --- | --- | --- |
+| 1 | CM_SetInitialProperties | Exchange Property | Immediately after HTTPS Sender | Preserve original SAP JSON body |
+| 2 | CM_SetHeaderValidationContext | Exchange Property | Before GS_ValidateHeaders.groovy | Preserve original SAP JSON body |
+| 3 | CM_SetGeneratedCorrelationId | Message Header and Exchange Property | After GS_EnsureCorrelationId.groovy | Preserve original SAP JSON body |
+| 4 | CM_SetPayloadValidationStatus | Exchange Property and Message Header | After JSON Schema Validation and monitoring extraction | Preserve original SAP JSON body |
+| 5 | CM_SetJmsHeaders | Message Header | Immediately before JMS Receiver | Preserve original SAP JSON body |
+| 6 | CM_SetAckResponse | Message Body and Message Header | Only after successful JMS publish | Replace body with ACK JSON |
+| 7 | CM_SetValidationErrorResponse | Message Body and Message Header | Validation exception subprocess | Replace body with validation error JSON |
+| 8 | CM_SetTechnicalErrorResponse | Message Body and Message Header | Technical exception subprocess | Replace body with technical error JSON |
 
 ## CM_SetInitialProperties
 
-| Field | Type | Value |
-| --- | --- | --- |
-| inboundReceivedAt | Exchange Property | Current UTC timestamp |
-| jmsQueueName | Exchange Property | JMS_SO_INBOUND |
-| rawContentType | Exchange Property | Header Content-Type |
-| validationStatus | Exchange Property | PENDING |
-| payloadPreservationMode | Exchange Property | ORIGINAL_SAP_JSON |
+Purpose: initialize base runtime properties before any validation. Configure these rows in the Exchange Property tab.
 
-Implementation note: do not alter the message body.
+| Action | Type | Name | Source Type | Source Value |
+| --- | --- | --- | --- | --- |
+| Create | Exchange Property | inboundReceivedAt | Expression | \${date:now:yyyy-MM-dd'T'HH:mm:ss'Z'} |
+| Create | Exchange Property | jmsQueueName | Constant | JMS_SO_INBOUND |
+| Create | Exchange Property | rawContentType | Header | Content-Type |
+| Create | Exchange Property | validationStatus | Constant | PENDING |
+| Create | Exchange Property | payloadPreservationMode | Constant | ORIGINAL_SAP_JSON |
+
+Body tab: no body entry. The inbound SAP Sales Order JSON must remain unchanged.
 
 ## CM_SetHeaderValidationContext
 
-| Field | Type | Value |
-| --- | --- | --- |
-| receivedCorrelationHeader | Exchange Property | Header X-Correlation-ID |
-| idempotencyKey | Exchange Property | Header Idempotency-Key |
-| consumerId | Exchange Property | Header X-Consumer-ID |
-| expectedContentType | Exchange Property | application/json |
+Purpose: copy inbound HTTP headers into exchange properties used by GS_ValidateHeaders.groovy. Configure these rows in the Exchange Property tab.
 
-Idempotency-Key must come from the HTTP header only. Do not inspect body idempotency fields as authoritative.
+| Action | Type | Name | Source Type | Source Value |
+| --- | --- | --- | --- | --- |
+| Create | Exchange Property | receivedCorrelationHeader | Header | X-Correlation-ID |
+| Create | Exchange Property | idempotencyKey | Header | Idempotency-Key |
+| Create | Exchange Property | consumerId | Header | X-Consumer-ID |
+| Create | Exchange Property | expectedContentType | Constant | application/json |
+
+Implementation rule: Idempotency-Key is authoritative only from the HTTP header. Do not use JSONPath to read idempotency from the body.
 
 ## CM_SetGeneratedCorrelationId
 
-| Field | Type | Value |
-| --- | --- | --- |
-| correlationId | Exchange Property | X-Correlation-ID when present, otherwise generated UUID |
-| X-Correlation-ID | Message Header | correlationId |
+Purpose: expose correlationId as both exchange property and message header after GS_EnsureCorrelationId.groovy has preserved or generated it.
 
-If X-Correlation-ID is missing, generate UUID before validation response, JMS publish, or monitoring fields are written.
+| Action | Type | Name | Source Type | Source Value |
+| --- | --- | --- | --- | --- |
+| Create | Exchange Property | correlationId | Property | correlationId |
+| Create | Message Header | X-Correlation-ID | Property | correlationId |
+
+Build note: GS_EnsureCorrelationId.groovy must run before this Content Modifier. If X-Correlation-ID was missing, the script generates UUID and stores it in property correlationId.
 
 ## CM_SetPayloadValidationStatus
 
-| Field | Type | Value |
-| --- | --- | --- |
-| validationStatus | Exchange Property | SUCCESS |
-| SAP_MessageProcessingLogCustomStatus | Message Header | SUCCESS |
+Purpose: mark the exchange as successfully validated after JSON Schema Validation and monitoring extraction.
 
-Set only after JSON Schema Validation and monitoring extraction succeed.
+| Action | Type | Name | Source Type | Source Value |
+| --- | --- | --- | --- | --- |
+| Update | Exchange Property | validationStatus | Constant | SUCCESS |
+| Create | Message Header | SAP_MessageProcessingLogCustomStatus | Constant | SUCCESS |
+
+Do not run this Content Modifier before schema validation. Validation failures must not publish to JMS.
 
 ## CM_SetJmsHeaders
 
-| JMS property | Source |
-| --- | --- |
-| correlationId | Exchange property correlationId |
-| idempotencyKey | Exchange property idempotencyKey |
-| consumerId | Exchange property consumerId |
-| purchaseOrderByCustomer | Exchange property purchaseOrderByCustomer |
-| soldToParty | Exchange property soldToParty |
-| itemCount | Exchange property itemCount |
-| inboundReceivedAt | Exchange property inboundReceivedAt |
-| salesOrderType | Exchange property salesOrderType |
-| salesOrganization | Exchange property salesOrganization |
-| distributionChannel | Exchange property distributionChannel |
-| incotermsClassification | Exchange property incotermsClassification when present |
+Purpose: create JMS-ready metadata before the JMS Receiver Adapter. Configure these rows in the Message Header tab or adapter-supported JMS property mapping as appropriate in the tenant.
 
-The JMS body must remain the original SAP Sales Order JSON.
+| Action | Type | Name | Source Type | Source Value |
+| --- | --- | --- | --- | --- |
+| Create | Message Header | X-Correlation-ID | Property | correlationId |
+| Create | Message Header | Idempotency-Key | Property | idempotencyKey |
+| Create | Message Header | X-Consumer-ID | Property | consumerId |
+| Create | Message Header | correlationId | Property | correlationId |
+| Create | Message Header | idempotencyKey | Property | idempotencyKey |
+| Create | Message Header | consumerId | Property | consumerId |
+| Create | Message Header | purchaseOrderByCustomer | Property | purchaseOrderByCustomer |
+| Create | Message Header | soldToParty | Property | soldToParty |
+| Create | Message Header | itemCount | Property | itemCount |
+| Create | Message Header | inboundReceivedAt | Property | inboundReceivedAt |
+| Create | Message Header | salesOrderType | Property | salesOrderType |
+| Create | Message Header | salesOrganization | Property | salesOrganization |
+| Create | Message Header | distributionChannel | Property | distributionChannel |
+| Create | Message Header | incotermsClassification | Property | incotermsClassification |
+
+Body tab: no body entry. JMS body must remain the original SAP Sales Order JSON payload.
 
 ## CM_SetAckResponse
 
-Execution rule: run only after JMS Receiver confirms successful publish.
+Purpose: build HTTP 202 ACK only after JMS Receiver publish succeeds. Configure headers in Message Header tab and response payload in Message Body tab.
 
-| Response element | Value |
-| --- | --- |
-| HTTP status | 202 |
-| Content-Type | application/json |
-| X-Correlation-ID | correlationId |
-| status | ACCEPTED |
-| correlationId | correlationId |
-| idempotencyKey | idempotencyKey |
-| message | Sales order accepted for asynchronous processing |
+Header rows:
+
+| Action | Type | Name | Source Type | Source Value |
+| --- | --- | --- | --- | --- |
+| Create | Message Header | Content-Type | Constant | application/json |
+| Create | Message Header | X-Correlation-ID | Property | correlationId |
+| Create | Message Header | CamelHttpResponseCode | Constant | 202 |
+
+Body row:
+
+| Action | Type | Name | Source Type | Source Value |
+| --- | --- | --- | --- | --- |
+| Update | Message Body | Body | Expression | { "status": "ACCEPTED", "correlationId": "\${property.correlationId}", "idempotencyKey": "\${property.idempotencyKey}", "message": "Sales order accepted for asynchronous processing" } |
+
+Rule: this Content Modifier must be placed after JMS Receiver Adapter. HTTP 202 must never be returned before JMS publish success.
 
 ## CM_SetValidationErrorResponse
 
-| Failure class | HTTP status | JMS publish |
-| --- | --- | --- |
-| Header validation | 400 | No |
-| Invalid Content-Type | 400 | No |
-| Malformed JSON | 400 | No |
-| JSON schema failure | 422 | No |
+Purpose: build validation error response in the exception subprocess. Configure headers in Message Header tab and response payload in Message Body tab.
 
-Response fields: status REJECTED, correlationId, errorCode, message.
+Header rows:
+
+| Action | Type | Name | Source Type | Source Value |
+| --- | --- | --- | --- | --- |
+| Create | Message Header | Content-Type | Constant | application/json |
+| Create | Message Header | X-Correlation-ID | Property | correlationId |
+| Create | Message Header | CamelHttpResponseCode | Property | httpStatusCode |
+| Create | Message Header | SAP_MessageProcessingLogCustomStatus | Constant | REJECTED |
+
+Body row:
+
+| Action | Type | Name | Source Type | Source Value |
+| --- | --- | --- | --- | --- |
+| Update | Message Body | Body | Expression | { "status": "REJECTED", "correlationId": "\${property.correlationId}", "errorCode": "\${property.errorCode}", "message": "\${property.errorMessage}" } |
+
+Required behavior: validation failures return HTTP 400 or 422 and do not publish to JMS_SO_INBOUND.
 
 ## CM_SetTechnicalErrorResponse
 
-| Failure class | HTTP status | JMS publish state |
-| --- | --- | --- |
-| JMS publish failure | 500 | Failed |
-| Unexpected runtime failure | 500 | Unknown |
+Purpose: build technical error response in the exception subprocess, including JMS publish failure.
 
-Response fields: status FAILED, correlationId, errorCode, message. Never return HTTP 202 when JMS publish fails.
+Header rows:
+
+| Action | Type | Name | Source Type | Source Value |
+| --- | --- | --- | --- | --- |
+| Create | Message Header | Content-Type | Constant | application/json |
+| Create | Message Header | X-Correlation-ID | Property | correlationId |
+| Create | Message Header | CamelHttpResponseCode | Constant | 500 |
+| Create | Message Header | SAP_MessageProcessingLogCustomStatus | Constant | FAILED |
+
+Body row:
+
+| Action | Type | Name | Source Type | Source Value |
+| --- | --- | --- | --- | --- |
+| Update | Message Body | Body | Expression | { "status": "FAILED", "correlationId": "\${property.correlationId}", "errorCode": "\${property.errorCode}", "message": "\${property.errorMessage}" } |
+
+Required behavior: JMS publish failure returns HTTP 500 with errorCode JMS_PUBLISH_FAILED. Do not return HTTP 202.
+
+## Optional JSONPath Extraction Reference
+
+GS_ExtractMonitoringFields.groovy is the preferred extraction mechanism. If a Content Modifier JSONPath extraction is used instead, use these rows only after JSON Schema Validation succeeds.
+
+| Action | Type | Name | Source Type | Source Value |
+| --- | --- | --- | --- | --- |
+| Create | Exchange Property | purchaseOrderByCustomer | JSONPath | $.PurchaseOrderByCustomer |
+| Create | Exchange Property | soldToParty | JSONPath | $.SoldToParty |
+| Create | Exchange Property | salesOrderType | JSONPath | $.SalesOrderType |
+| Create | Exchange Property | salesOrganization | JSONPath | $.SalesOrganization |
+| Create | Exchange Property | distributionChannel | JSONPath | $.DistributionChannel |
+| Create | Exchange Property | incotermsClassification | JSONPath | $.IncotermsClassification |
+
+For itemCount, use Groovy because CPI Content Modifier JSONPath support may not reliably calculate array size across tenants.
+
+## Build Guardrails
+
+| Guardrail | Required behavior |
+| --- | --- |
+| Payload preservation | No Content Modifier may alter the body before JMS Receiver |
+| Idempotency | Do not read idempotencyKey from JSON body |
+| Correlation | X-Correlation-ID is optional; use generated UUID when missing |
+| Consumer | X-Consumer-ID is mandatory and must be copied from header |
+| Validation failure | No JMS publish |
+| JMS failure | HTTP 500, not HTTP 202 |
+| Runtime scope | No S/4HANA call, CAP, PostgreSQL, Event Mesh, UI, RFC, BAPI, custom Z service, canonical model, or persistence outside JMS |
