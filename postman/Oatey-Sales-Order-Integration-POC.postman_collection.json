@@ -1,0 +1,87 @@
+{
+    "info": {
+          "name": "Oatey Sales Order Integration POC",
+          "description": "Postman Collection v2.1 for APIM -> IFL_SO_INBOUND -> JMS_SO_INBOUND POC tests. Valid requests are accepted asynchronously after JMS send. Payload validation is Groovy-based in SAP Integration Suite.",
+          "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+    },
+    "variable": [
+          { "key": "baseUrl", "value": "https://apim.example.com", "type": "string" },
+          { "key": "correlationId", "value": "poc-correlation-001", "type": "string" },
+          { "key": "idempotencyKey", "value": "poc-idempotency-001", "type": "string" },
+          { "key": "consumerId", "value": "POSTMAN_POC", "type": "string" }
+    ],
+    "item": [
+          {
+                  "name": "1. Happy Path",
+                  "request": {
+                            "method": "POST",
+                            "header": [
+                                        { "key": "Content-Type", "value": "application/json" },
+                                        { "key": "X-Correlation-ID", "value": "{{correlationId}}" },
+                                        { "key": "Idempotency-Key", "value": "{{idempotencyKey}}" },
+                                        { "key": "X-Consumer-ID", "value": "{{consumerId}}" }
+                            ],
+                            "body": { "mode": "raw", "raw": "{
+                                "SalesOrderType": "OR",
+                                "SalesOrganization": "1000",
+                                "DistributionChannel": "10",
+                                "OrganizationDivision": "00",
+                                "SoldToParty": "476272",
+                                "PurchaseOrderByCustomer": "POC-POSTMAN-001",
+                                "CustomerPurchaseOrderType": "NE",
+                                "CustomerPurchaseOrderDate": "/Date(1719878400000)/",
+                                "SalesOrderDate": "/Date(1719878400000)/",
+                                "PricingDate": "/Date(1719878400000)/",
+                                "RequestedDeliveryDate": "/Date(1719964800000)/",
+                                "to_Item": {
+                                      "results": [
+                                              {
+                                                        "UnderlyingPurchaseOrderItem": "10",
+                                                        "Material": "MAT-POC-001",
+                                                        "PricingDate": "/Date(1719878400000)/",
+                                                        "RequestedQuantity": "1",
+                                                        "RequestedQuantityUnit": "EA",
+                                                        "to_PricingElement": {
+                                                                    "results": [
+                                                                                  {
+                                                                                                  "ConditionType": "PR00",
+                                                                                                  "ConditionQuantity": "1",
+                                                                                                  "ConditionRateValue": "10.00",
+                                                                                                  "ConditionCurrency": "USD"
+                                                                                  }
+                                                                    ]
+                                                        }
+                                              }
+                                      ]
+                                }
+                            }" },
+                            "url": { "raw": "{{baseUrl}}/sales-orders", "host": ["{{baseUrl}}"], "path": ["sales-orders"] }
+                  },
+                  "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["pm.test('HTTP 202 Accepted', function () { pm.response.to.have.status(202); });", "pm.test('Accepted status', function () { pm.expect(pm.response.json().status).to.eql('ACCEPTED'); });"] } }]
+          },
+          {
+                  "name": "2. Missing SoldToParty",
+                  "request": {
+                            "method": "POST",
+                            "header": [
+                                        { "key": "Content-Type", "value": "application/json" },
+                                        { "key": "X-Correlation-ID", "value": "poc-missing-soldto" },
+                                        { "key": "Idempotency-Key", "value": "poc-idempotency-missing-soldto" },
+                                        { "key": "X-Consumer-ID", "value": "{{consumerId}}" }
+                            ],
+                            "body": { "mode": "raw", "raw": "{
+                                "SalesOrderType": "OR",
+                                "SalesOrganization": "1000",
+                                "DistributionChannel": "10",
+                                "OrganizationDivision": "00",
+                                "PurchaseOrderByCustomer": "POC-POSTMAN-002",
+                                "CustomerPurchaseOrderType": "NE",
+                                "CustomerPurchaseOrderDate": "/Date(1719878400000)/",
+                                "SalesOrderDate": "/Date(1719878400000)/",
+                                "PricingDate": "/Date(1719878400000)/",
+                                "RequestedDeliveryDate": "/Date(1719964800000)/",
+                                "to_Item": { "results": [ { "UnderlyingPurchaseOrderItem": "10", "Material": "MAT-POC-001", "PricingDate": "/Date(1719878400000)/", "RequestedQuantity": "1", "RequestedQuantityUnit": "EA", "to_PricingElement": { "results": [ { "ConditionType": "PR00", "ConditionQuantity": "1", "ConditionRateValue": "10.00", "ConditionCurrency": "USD" } ] } } ] }
+                            }" },
+                            "url": { "raw": "{{baseUrl}}/sales-orders", "host": ["{{baseUrl}}"], "path": ["sales-orders"] }
+                  },
+                  "event": [{ "listen": "test",
