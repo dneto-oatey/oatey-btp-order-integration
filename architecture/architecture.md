@@ -2,468 +2,103 @@
 
 ## Executive Summary
 
-This document defines the enterprise architecture for the Oatey Sales Order Integration on SAP BTP. The solution receives Sales Orders from multiple external consumers and creates corresponding sales orders in SAP S/4HANA, with a design that supports current and future consumer onboarding without architectural redesign.
+This document defines the approved architecture and POC implementation decisions for the Oatey SAP BTP inbound Sales Order integration. The approved runtime remains APIM + SAP Integration Suite + JMS + SAP standard Sales Order APIs.
 
----
+The IFL_SO_INBOUND POC implementation and runtime testing are complete. The inbound integration flow is operational and ready for the orchestration phase implementation.
 
-## Architectural Principles (Mandatory)
-
-The following principles are non-negotiable and guide all implementation decisions:
-
-- **SAP Clean Core** - Minimize customizations to core S/4HANA
-- **API First** - All integrations exposed via standardized APIs
-- **Reprocessing Ready** - Every message must be idempotent and replayable
-- **Loose Coupling** - Decouple consumer interactions from core processing
-- **Consumer Agnostic Design** - Add new consumers without modifying existing flows
-- **Retry & Recovery** - Automatic retry with exponential backoff and dead-letter handling
-- **Observability** - Complete traceability through Correlation IDs and structured logging
+## Approved Runtime Architecture
 
----
+Consumer / Partner / EDI Source -> SAP API Management -> IFL_SO_INBOUND -> JMS_SO_INBOUND -> IFL_SO_ORCHESTRATION -> SAP Standard Sales Order API -> Callback Notification.
 
-## Approved Architecture
+## Scope Guardrails
 
-### 1. Consumer Layer
+Do not introduce CAP, PostgreSQL, Event Mesh, UI, RFC, BAPI, custom Z services, S/4HANA calls inside IFL_SO_INBOUND, canonical models, or payload persistence outside JMS.
 
-#### Supported Consumers
+## IFL_SO_INBOUND Implementation Status
 
-- **Sales Rep Portal** (Initial - Synchronous)
-- **EDI Translators** (Asynchronous - Future)
-- **Partner Integrations** (Asynchronous - Future)
+| Area | Status |
+| --- | --- |
+| HTTPS Endpoint | Validated |
+| OAuth Authentication | Validated against Integration Suite runtime endpoint |
+| Header Validation | Validated |
+| Correlation Handling | Validated |
+| JMS Publication | Validated |
+| HTTP 202 ACK Response | Validated |
+| Exception Subprocess | Validated |
+| Runtime Deployment | Validated |
 
-#### Consumer Onboarding
+Status: Completed. The inbound integration flow is operational and ready for IFL_SO_ORCHESTRATION build.
 
-Each consumer receives:
-- Dedicated API Product in API Management
-- Individual Rate Limiting policy
-- Consumer-specific OAuth/API Key credentials
-- Isolated analytics and monitoring
+## Correlation Strategy
 
----
+X-Correlation-ID is optional in the current implementation. IFL_SO_INBOUND preserves an incoming value when provided and generates a UUID when the header is missing. The ACK response returns correlationId, and correlationId is used for operational traceability across MPL, error responses, and JMS processing.
 
-### 2. API Management Layer
+## Idempotency Strategy
 
-**Responsibility**: Entry point and policy enforcement
-
-**Capabilities**:
-- Authentication (OAuth 2.0, API Keys)
-- Authorization (Role-based access control)
-- Quotas and Rate Limiting
-- Analytics and consumer tracking
-- API versioning support
+Idempotency-Key is optional in the current POC implementation. Current inbound flow preserves idempotency key when provided but does not reject requests when missing. Validation and duplicate handling are deferred to the orchestration layer. A future production implementation may enforce mandatory idempotency.
 
-**Out of Scope**:
-- Payload mapping
-- Orchestration
-- Business logic
-- System integration
+## SAP Integration Suite Header Handling Lessons Learned
 
----
+During implementation it was observed that inbound HTTP headers are not always consistently available throughout the CPI runtime. The best practice adopted is to capture inbound headers immediately after the HTTPS Sender, store values as Exchange Properties, and use Exchange Properties throughout processing.
 
-### 3. Integration Patterns
+| Header | Exchange Property usage |
+| --- | --- |
+| Content-Type | Content validation and parser selection |
+| X-Correlation-ID | Preserve or generate correlationId |
+| X-Consumer-ID | Consumer traceability; UNKNOWN_CONSUMER fallback |
+| Idempotency-Key | Preserve when supplied; empty when missing |
 
-#### Pattern A: Synchronous (Sales Rep Portal)
+Processing should use Exchange Properties instead of relying on direct HTTP header access after the initial capture step.
 
-```
-Sales Rep Portal
-    ↓
-API Management (Authentication, Rate Limiting)
-    ↓
-SAP Sales Order API (S/4HANA)
-    ↓
-Response → Portal (Immediate UX feedback)
-```
-
-**Characteristics**:
-- Direct pass-through to S/4HANA
-- Bypasses Integration Suite for low-latency response
-- Real-time user experience
-- No queuing
+## Validation Approach
 
-**Use Case**: User-driven, synchronous operations requiring immediate feedback
-
----
-
-#### Pattern B: Asynchronous (EDI, Partners, Future Consumers)
-
-```
-Consumer
-    ↓
-API Management (Authentication, Rate Limiting)
-    ↓
-IFL_SO_INBOUND (Validation & Buffering)
-    ↓
-JMS_SO_INBOUND (Message Queue)
-    ↓
-IFL_SO_ORCHESTRATION (Processing & Transformation)
-    ↓
-SAP Sales Order API (S/4HANA)
-    ↓
-Callback A2A → Sales Order Confirmation Processing
-    ↓
-Consumer Notification (Async Callback)
-```
-
-**Characteristics**:
-- Asynchronous message-driven architecture
-- Decoupled consumer from core processing
-- Queue-based buffering and retry
-- Dead-letter queue for failed messages
-- Callbacks for consumer notification
-
-**Use Case**: Batch processing, EDI translations, partner integrations, resilience at scale
-
----
-
-## Component Architecture
-
-### 3.1 Inbound Integration Flow (IFL_SO_INBOUND)
-
-**Purpose**: First-stage validation and consumer-specific processing
-
-**Responsibilities**:
-- Validate JSON/XML payload structure
-- Validate required fields per consumer contract
-- Apply consumer-specific transformation rules
-- Generate Correlation ID (if not provided)
-- Enrich message with metadata
-- Publish to JMS queue
-- Return ACK to consumer
-
-**Out of Scope**:
-- Direct S/4HANA calls
-- Core business logic
-- System orchestration
-
-**Outputs**:
-- JMS message on `JMS_SO_INBOUND` queue
-- Correlation ID for tracking
-- Consumer metadata (Consumer ID, API Product, timestamp)
-
-**Error Handling**:
-- Validation failures → HTTP 400 with error details
-- Schema violations → HTTP 422 Unprocessable Entity
-- System errors → HTTP 500 with Correlation ID
-
----
-
-### 3.2 JMS Queue (JMS_SO_INBOUND)
-
-**Purpose**: Decoupling and buffering
-
-**Configuration**:
-- Queue name: `JMS_SO_INBOUND`
-- Dead-letter queue: `DLQ_SO_INBOUND`
-- Message persistence: Enabled
-- Time to Live (TTL): 7 days
-- Max retries before DLQ: 3
-
-**Message Format**:
-```json
-{
-  "correlationId": "UUID",
-  "consumerId": "SALES_REP_PORTAL",
-  "payload": {/* Original sales order */},
-  "metadata": {
-    "timestamp": "ISO8601",
-    "apiProductName": "SalesRepPortal-API-v1",
-    "consumerVersion": "1.0"
-  },
-  "idempotencyKey": "consumer_order_id"
-}
-```
-
----
-
-### 3.3 Orchestration Integration Flow (IFL_SO_ORCHESTRATION)
-
-**Purpose**: Core message processing and S/4HANA integration
-
-**Responsibilities**:
-- Consume messages from JMS queue
-- Transform consumer model to SAP Sales Order format
-- Call SAP Sales Order API (standard API only)
-- Process API response (success/error)
-- Update processing status
-- Trigger callback to consumer (if configured)
-- Log all operations with Correlation ID
-
-**Out of Scope**:
-- Complex business rule engine
-- Custom persistence
-- Direct RFC/BAPI calls
-
-**Transformation Rules**:
-- Map consumer field names to SAP standardized fields
-- Apply consumer-specific defaults
-- Validate against SAP Sales Order schema
-- Handle currency/unit conversions per consumer
-
-**Error Handling**:
-- Non-recoverable errors → Move to DLQ with error details
-- Transient errors → Automatic retry with exponential backoff
-- Timeout errors → Retry after configurable delay
-
----
-
-### 3.4 Callback Architecture
-
-**Purpose**: Notify consumers of processing results
-
-**Flow**:
-```
-S/4HANA Sales Order Created
-    ↓
-Sales Order Confirmation Processing (CPI iFlow)
-    ↓
-Extract Consumer Callback URL
-    ↓
-POST Confirmation to Consumer
-    ↓
-Retry on failure (max 5 times)
-```
-
-**Callback Payload**:
-```json
-{
-  "correlationId": "UUID",
-  "status": "SUCCESS|FAILED|PARTIAL",
-  "salesOrderNumber": "SO-12345",
-  "consumerId": "SALES_REP_PORTAL",
-  "processingTimestamp": "ISO8601",
-  "errors": [
-    {
-      "code": "INVALID_FIELD",
-      "field": "customerNumber",
-      "message": "Customer not found in SAP"
-    }
-  ]
-}
-```
-
----
-
-## Reprocessing & Idempotency
-
-### Correlation ID
-
-**Generation**: 
-- Generated by IFL_SO_INBOUND if not provided by consumer
-- Format: UUID v4
-- Included in all logs and callbacks
-
-**Usage**:
-- Track message through entire pipeline
-- Identify duplicate submissions
-- Root cause analysis
-- End-to-end monitoring
-
----
-
-### Idempotency Key
-
-**Purpose**: Prevent duplicate Sales Orders in S/4HANA
-
-**Strategy**:
-- Consumer provides unique key per order (e.g., `PORTAL-ORDER-001`)
-- Stored in custom field or header
-- Checked before S/4HANA API call
-- Prevents duplicate orders on retry
-
-**Implementation**:
-- Cache idempotency keys for 24 hours
-- Return cached response if duplicate detected
-- Log duplicate attempts
-
----
-
-### Retry Strategy
-
-**Exponential Backoff Configuration**:
-- Retry 1: 5 seconds
-- Retry 2: 25 seconds
-- Retry 3: 125 seconds
-- Max retries: 3
-- Total retry window: ~2.5 minutes
-
-**Retry Conditions**:
-- Network timeouts
-- Transient S/4HANA errors (HTTP 5xx)
-- Service unavailability
-- Rate limit errors (HTTP 429)
-
-**Non-Retry Conditions**:
-- Validation failures (HTTP 4xx)
-- Authentication errors
-- Business rule violations
-- Customer not found
-
----
-
-### Dead-Letter Queue (DLQ_SO_INBOUND)
-
-**Purpose**: Capture messages that cannot be processed
-
-**Configuration**:
-- Queue name: `DLQ_SO_INBOUND`
-- Manual intervention required
-- Alert on DLQ depth > 0
-- Monthly DLQ audit
-
-**DLQ Message Content**:
-```json
-{
-  "originalMessage": {/* JMS message */},
-  "failureReason": "String",
-  "failureTimestamp": "ISO8601",
-  "failureCount": 3,
-  "correlationId": "UUID"
-}
-```
-
----
-
-## Monitoring & Observability
-
-### Structured Logging
-
-Every operation logs:
-- **Correlation ID**: Trace across systems
-- **Consumer ID**: Identify source
-- **Sales Order Number**: Business entity
-- **Timestamp**: ISO 8601 format
-- **Processing Status**: RECEIVED, VALIDATED, QUEUED, PROCESSING, SUCCESS, FAILED
-- **Error Category**: VALIDATION, SYSTEM, TRANSIENT, BUSINESS_RULE
-
-### Integration Suite Monitoring
-
-**Integration Monitoring Dashboard**:
-- Message processing metrics
-- Error rate by consumer
-- Latency analysis
-- Throughput monitoring
-
-**Alert Triggers**:
-- DLQ depth > 0
-- Processing latency > 5 minutes
-- Error rate > 5%
-- S/4HANA API unavailability
-
-### SAP Cloud ALM Integration
-
-- Link CPI monitoring to Cloud ALM
-- Track end-to-end processing time
-- Identify bottlenecks
-- Performance trending
-
----
-
-## Naming Conventions
-
-All artifacts follow standardized naming:
-
-| Artifact Type | Naming Pattern | Example |
-|---|---|---|
-| Inbound iFlow | `IFL_SO_INBOUND` | `IFL_SO_INBOUND` |
-| Orchestration iFlow | `IFL_SO_ORCHESTRATION` | `IFL_SO_ORCHESTRATION` |
-| JMS Queue | `JMS_SO_INBOUND` | `JMS_SO_INBOUND` |
-| Dead-Letter Queue | `DLQ_SO_INBOUND` | `DLQ_SO_INBOUND` |
-| Exception Handler | `SP_EXCEPTION_HANDLER` | `SP_EXCEPTION_HANDLER` |
-| Variable Mapping | `VM_CONSUMER_MAPPING` | `VM_CONSUMER_MAPPING` |
-| Script (Correlation ID) | `SCR_CORRELATION_ID` | `SCR_CORRELATION_ID` |
-| API Product | `{Consumer}-API-v{Version}` | `SalesRepPortal-API-v1` |
-
----
-
-## SAP Clean Core Alignment
-
-**Clean Core Principles Enforced**:
-
-1. **Standard APIs Only**
-   - Use SAP Sales Order API (C_SALESORDERAPI_ORDERS)
-   - No BAPI calls
-   - No RFC calls
-   - No custom Z services
-
-2. **Minimal Customizations**
-   - Custom fields stored in standard extensibility fields
-   - No modifications to standard processes
-   - No custom tables
-   - All extensions reversible
-
-3. **Future-Proof**
-   - SAP Cloud upgrades do not break integration
-   - API versions tracked and managed
-   - Deprecation strategy documented
-
----
-
-## Consumer Onboarding Checklist
-
-For each new consumer, complete:
-
-- [ ] Create API Product in API Management
-- [ ] Define consumer-specific rate limits
-- [ ] Configure OAuth/API Key credentials
-- [ ] Document field mapping rules (VM_CONSUMER_MAPPING)
-- [ ] Define business-specific defaults
-- [ ] Configure callback URL (if asynchronous)
-- [ ] Test end-to-end flow
-- [ ] Configure monitoring and alerts
-- [ ] Document consumer-specific error handling
-- [ ] Train operations team
-
----
-
-## Deployment Architecture
-
-### SAP Cloud Integration (CPI) Deployment
-
-- **Region**: [Specify customer region]
-- **Tenant**: [Specify customer tenant]
-- **Availability**: High Availability enabled
-- **Backup**: Daily automated backups
-
-### API Management Deployment
-
-- **Plan**: API Management on SAP Cloud Platform
-- **API Portal**: Enabled for consumer documentation
-- [ **Developer Community**: Enabled for API feedback**
-
-### Event Mesh (Future)
-
-- Reserved for future event-driven patterns
-- Configured for Sales Order lifecycle events
-- Pub/Sub for consumer notifications
-
----
-
-## Document References
-
-**Baseline Documentation**:
-- Oatey API Management Patterns & Best Practices
-- SAP BTP Enterprise Integration Architecture
-
-**Standards**:
-- SAP Clean Core Guidelines
-- API Management Best Practices
-- Cloud Integration Security Guidelines
-
----
-
-## Approval & Sign-Off
-
-| Role | Name | Date | Signature |
-|---|---|---|---|
-| Enterprise Architect | | | |
-| SAP BTP Practice Lead | | | |
-| Project Lead | | | |
-| Client Stakeholder | | | |
-
----
+The executable POC flow uses Groovy-based validation. JSON Schema Validation is not used because the target SAP Integration Suite tenant did not provide a native JSON Schema Validator component. EDI Validator and XML Validator are not valid substitutes for JSON payload validation. JSON schema validation remains a future option depending on tenant capabilities and runtime availability.
+
+## JMS Configuration
+
+JMS publication from IFL_SO_INBOUND to JMS_SO_INBOUND was successfully validated through runtime testing.
+
+| Setting | Value |
+| --- | --- |
+| Queue | JMS_SO_INBOUND |
+| Access Type | Non-Exclusive |
+| Expiration Period | 30 Days |
+| Retention Alert Threshold | 2 Days |
+| Transfer Exchange Properties | Enabled |
+| Compress Stored Messages | Enabled |
+| Encrypt Stored Messages | Enabled |
+
+JMS decouples inbound acceptance from orchestration and provides resilience, replay capability, retry support, and consumer decoupling.
+
+## Monitoring Strategy
+
+Payload logging is not performed for successful transactions. This follows operational best practices and payload minimization.
+
+| Path | Monitoring approach |
+| --- | --- |
+| Success path | Standard MPL, correlationId, and queue monitoring |
+| Error path | Exception subprocess, controlled error responses, and error context logging |
+
+## Security Strategy
+
+Current POC authentication uses OAuth2 Client Credentials against the SAP Integration Suite Runtime Endpoint. Future production runtime will place Integration Suite behind SAP API Management. API Management will provide OAuth enforcement, consumer separation, rate limiting, spike arrest, and analytics.
+
+## POC Decisions
+
+| Decision | Description | Reason |
+| --- | --- | --- |
+| D-001 | No CAP Layer | Approved architecture is APIM + Integration Suite + JMS + SAP Standard APIs |
+| D-002 | No payload logging on successful processing | Security and operational best practices |
+| D-003 | Header normalization immediately after HTTPS Sender | Runtime header propagation inconsistencies |
+| D-004 | JMS decoupling between inbound and orchestration layers | Resilience, replay capability, retry support, and consumer decoupling |
+
+## Clean Core Alignment
+
+The solution uses SAP standard Sales Order APIs only. No BAPI, RFC, custom Z services, S/4HANA core modification, custom persistence, or custom canonical model is introduced.
 
 ## Document History
 
-| Version | Date | Author | Changes |
-|---|---|---|---|
-| 1.0 | 2026-06-01 | Architecture Team | Initial architecture definition |
-
+| Version | Date | Changes |
+| --- | --- | --- |
+| 1.0 | 2026-06-01 | Initial architecture definition |
+| 1.1 | 2026-06-04 | Updated with IFL_SO_INBOUND POC implementation decisions and lessons learned |
