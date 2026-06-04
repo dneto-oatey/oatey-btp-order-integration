@@ -14,6 +14,10 @@ Every Content Modifier field is documented with Action, Type, Name, Source Type,
 
 Start / HTTPS Sender -> CM_SetInitialProperties -> CM_SetHeaderValidationContext -> GS_ValidateHeaders -> GS_EnsureCorrelationId -> GS_ExtractMonitoringFields -> CM_SetPayloadValidationStatus -> GS_PrepareJmsMessage -> CM_SetJmsHeaders -> Send to JMS Receiver -> CM_SetAckResponse -> End
 
+## Header Normalization
+
+Capture Content-Type, X-Correlation-ID, X-Consumer-ID, and Idempotency-Key immediately after HTTPS Sender and store them as Exchange Properties. Processing should use Exchange Properties rather than direct HTTP header access.
+
 ## CM_SetInitialProperties
 
 | Action | Type | Name | Source Type | Source Value | Data Type |
@@ -55,8 +59,6 @@ Start / HTTPS Sender -> CM_SetInitialProperties -> CM_SetHeaderValidationContext
 | Create | Message Header | itemCount | Property | itemCount | java.lang.String |
 | Create | Message Header | inboundReceivedAt | Property | inboundReceivedAt | java.lang.String |
 
-Transfer Exchange Properties must be enabled on the JMS Receiver so these values are available to IFL_SO_ORCHESTRATION.
-
 ## CM_SetAckResponse
 
 | Action | Type | Name | Source Type | Source Value | Data Type |
@@ -78,6 +80,6 @@ Transfer Exchange Properties must be enabled on the JMS Receiver so these values
 
 ## JMS And Validation Notes
 
-Do not use JMS Request Reply. Use one-way Send to JMS Receiver with Queue JMS_SO_INBOUND, Access Type Non-Exclusive, Retention 7 days, Transfer Exchange Properties Enabled, Compression enabled if configured in tenant, and Encryption enabled if configured in tenant.
+Do not use JMS Request Reply. Use one-way Send to JMS Receiver with Queue JMS_SO_INBOUND, Access Type Non-Exclusive, Expiration Period 30 Days, Retention Alert Threshold 2 Days, Transfer Exchange Properties Enabled, Compress Stored Messages Enabled, and Encrypt Stored Messages Enabled.
 
 EDI Validator and XML Validator are not valid substitutes for JSON payload validation. Payload validation is implemented through Groovy logic.
