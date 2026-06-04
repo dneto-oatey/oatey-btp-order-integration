@@ -4,7 +4,9 @@
 
 Manual SAP Integration Suite build guide for the completed IFL_SO_INBOUND POC implementation. Runtime remains APIM -> IFL_SO_INBOUND -> JMS_SO_INBOUND -> IFL_SO_ORCHESTRATION -> standard SAP Sales Order API.
 
-No CAP, PostgreSQL, Event Mesh, UI, RFC, BAPI, custom Z services, S/4HANA call inside IFL_SO_INBOUND, canonical model, or payload persistence outside JMS.
+## Status
+
+Status: COMPLETED. Deployment, OAuth authentication, HTTPS endpoint, header validation, correlation handling, consumer fallback, idempotency fallback, JMS publication, ACK 202 response, and exception subprocess were successfully validated in runtime.
 
 ## Current Executable Main Flow
 
@@ -12,44 +14,34 @@ Start / HTTPS Sender -> CM_SetInitialProperties -> CM_SetHeaderValidationContext
 
 No JSON Schema Validation step is present.
 
-## Header Handling Lessons Learned
+## Final Runtime Behavior
 
-Capture Content-Type, X-Correlation-ID, X-Consumer-ID, and Idempotency-Key immediately after HTTPS Sender and store them as Exchange Properties. Use Exchange Properties throughout processing because direct HTTP header propagation is not always consistent in CPI runtime.
+| Scenario | Runtime result | Status |
+| --- | --- | --- |
+| Happy Path | 202 ACCEPTED | PASS |
+| Missing X-Correlation-ID | UUID generated automatically | PASS |
+| Missing X-Consumer-ID | UNKNOWN_CONSUMER fallback | PASS |
+| Missing Idempotency-Key | Accepted with empty idempotency key | PASS |
+| Invalid Content-Type | Rejected | PASS |
 
-## Header Rules
+## Header Handling Lesson Learned
 
-| Header | Rule |
-| --- | --- |
-| Content-Type | Mandatory; must contain application/json |
-| X-Correlation-ID | Optional; CPI generates UUID when missing |
-| Idempotency-Key | Optional for POC; store empty value when missing |
-| X-Consumer-ID | Optional for POC; store UNKNOWN_CONSUMER when missing |
+Inbound HTTP headers were not consistently accessible throughout runtime processing. Capture Content-Type, X-Correlation-ID, X-Consumer-ID, and Idempotency-Key into Exchange Properties immediately after HTTPS Sender and use Exchange Properties for subsequent processing.
 
-## Validation Approach
+## Responsibility Boundary
 
-Payload validation is Groovy-based. JSON Schema Validation is not used in the executable iFlow because the target tenant did not provide a native JSON Schema Validator. EDI Validator and XML Validator are not valid substitutes. JSON schema validation remains a future option depending on tenant capabilities.
+IFL_SO_INBOUND handles OAuth authentication, HTTPS endpoint, header validation, correlation handling, consumer identification, idempotency preservation, basic JSON validation, JMS publication, ACK response, and exception handling.
 
-## JMS Receiver
+IFL_SO_INBOUND does not handle SAP business validation, customer validation, material validation, pricing validation, partner determination, sales area validation, or sales order business rules.
 
-| Setting | Value |
-| --- | --- |
-| Pattern | One-way Send to JMS Receiver |
-| Queue | JMS_SO_INBOUND |
-| Access Type | Non-Exclusive |
-| Expiration Period | 30 Days |
-| Retention Alert Threshold | 2 Days |
-| Transfer Exchange Properties | Enabled |
-| Compress Stored Messages | Enabled |
-| Encrypt Stored Messages | Enabled |
+## Monitoring Lesson Learned
 
-Do not use JMS Request Reply. HTTP 202 is returned only after successful JMS Send. JMS send failure returns HTTP 500 through the local exception subprocess.
+SAP Integration Suite only exposes Script-added MPL properties when log level is Debug or Trace. Production uses INFO log level. Troubleshooting may temporarily use Debug or Trace. Normal operation does not depend on MPL custom properties.
 
-## Exception Subprocess
+## Logging Strategy
 
-Exception Subprocess -> GS_BuildErrorContext -> CM_SetErrorResponse -> End
+Success path: no payload logging, only operational metadata. Error path: no payload persistence by default, with Trace mode used for deep troubleshooting. Reasons: security, storage optimization, and operational best practices.
 
-The subprocess must not publish to JMS. It returns JSON error responses, sets Content-Type application/json, sets CamelHttpResponseCode from httpStatus, returns 400/422 for validation errors, and returns 500 for technical or JMS errors.
+## Next Phase
 
-## Monitoring
-
-Payload logging is not performed for successful transactions. Success path monitoring uses standard MPL, correlationId, and queue monitoring. Error path monitoring uses controlled error responses and error context logging.
+IFL_SO_ORCHESTRATION will implement JMS consumption, idempotency enforcement, SAP Sales Order API invocation, retry strategy, DLQ strategy, callback notifications, and SAP business validation.
