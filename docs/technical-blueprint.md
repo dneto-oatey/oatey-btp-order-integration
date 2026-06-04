@@ -2,171 +2,93 @@
 
 ## 1. Objective
 
-Build the first implementation skeleton for the Oatey SAP BTP inbound sales order integration using the approved architecture in `architecture/architecture.md` and the detailed inbound flow in `architecture/inbound-flow.md`.
+Document the actual POC implementation decisions for the Oatey SAP BTP inbound Sales Order integration. The approved architecture remains APIM + SAP Integration Suite + JMS + SAP standard Sales Order APIs.
 
-The design supports two patterns:
+## 2. Implementation Status
 
-- Synchronous Sales Rep Portal traffic through SAP API Management directly to the standard SAP Sales Order API.
-- Asynchronous EDI and partner traffic through SAP API Management, SAP Integration Suite, JMS buffering, orchestration, and callback notification.
+IFL_SO_INBOUND status: Completed.
 
-## 2. Mandatory Architecture Alignment
+Validated in SAP Integration Suite runtime:
 
-| Principle | Implementation Direction |
+| Capability | Status |
 | --- | --- |
-| SAP Clean Core | Use standard SAP Sales Order APIs only. No RFC, BAPI, custom Z services, or S/4HANA core modifications. |
-| API First | All consumer entry points are exposed and governed through SAP API Management. |
-| Reprocessing Ready | Every asynchronous message carries a correlation ID and idempotency key. |
-| Loose Coupling | CPI and JMS decouple asynchronous consumers from SAP backend processing. |
-| Consumer Agnostic | Consumer-specific behavior lives in API products, mappings, and configuration. |
-| Retry and Recovery | Retry transient failures with exponential backoff, then route exhausted messages to DLQ. |
-| Observability | Log correlation ID, consumer ID, status, error category, and timestamps at every step. |
+| HTTPS Endpoint | Validated |
+| OAuth Authentication | Validated |
+| Header Validation | Validated |
+| Correlation Handling | Validated |
+| JMS Publication | Validated |
+| HTTP 202 ACK Response | Validated |
+| Exception Subprocess | Validated |
+| Runtime Deployment | Validated |
+
+The inbound integration flow is operational and ready for orchestration phase implementation.
 
 ## 3. Runtime Topology
 
-```mermaid
-flowchart LR
-    Portal["Sales Rep Portal"] --> APIM["SAP API Management"]
-    APIM --> S4["SAP Sales Order API / C_SALESORDERAPI_ORDERS"]
-    S4 --> Portal
+Consumer -> SAP API Management -> IFL_SO_INBOUND -> JMS_SO_INBOUND -> IFL_SO_ORCHESTRATION -> SAP standard Sales Order API -> Callback Notification.
 
-    AsyncConsumer["Epicor EDI / Partner Consumer"] --> APIM
-    APIM --> Inbound["IFL_SO_INBOUND"]
-    Inbound --> JMS["JMS_SO_INBOUND"]
-    JMS --> Orch["IFL_SO_ORCHESTRATION"]
-    Orch --> S4
-    Orch --> Callback["Sales Order Confirmation Processing"]
-    Callback --> AsyncConsumer
-    JMS --> DLQ["DLQ_SO_INBOUND"]
-```
+## 4. Correlation Strategy
 
-## 4. API Management Skeleton
+X-Correlation-ID is optional. IFL_SO_INBOUND preserves an incoming value when provided, generates a UUID when missing, returns correlationId in the ACK response, and uses correlationId for operational traceability.
 
-API Management owns authentication, authorization, quota, rate limiting, API versioning, analytics, and consumer isolation.
+## 5. Idempotency Strategy
 
-Initial API products:
+Idempotency-Key is optional in the current POC. Current inbound flow preserves idempotency key when provided but does not reject requests when missing. Idempotency validation is deferred to IFL_SO_ORCHESTRATION. Future production implementation may enforce mandatory idempotency.
 
-| API Product | Consumer | Pattern | Target |
-| --- | --- | --- | --- |
-| `REP_PORTAL_API` | Sales Rep Portal | Synchronous | S/4HANA Sales Order API |
-| `EDL_SALES_ORDER_INBOUND_API` | Epicor HQ / EDI Translator | Asynchronous | `IFL_SO_INBOUND` |
-| `CONSUMER_A_API` | Future partners | Asynchronous | `IFL_SO_INBOUND` |
+## 6. Header Normalization Lessons Learned
 
-API Management must not perform payload mapping, orchestration, or business logic.
+Inbound HTTP headers are not always consistently available throughout the CPI runtime. The implemented best practice is to capture inbound headers immediately after HTTPS Sender, store values as Exchange Properties, and use Exchange Properties throughout processing.
 
-## 5. Synchronous Sales Rep Portal Flow
+| Header | Captured use |
+| --- | --- |
+| Content-Type | Mandatory application/json validation |
+| X-Correlation-ID | Preserve or generate UUID |
+| X-Consumer-ID | Optional POC value; UNKNOWN_CONSUMER fallback |
+| Idempotency-Key | Optional POC value; empty fallback |
 
-The Sales Rep Portal path is direct pass-through for low latency:
+## 7. Validation Approach
 
-1. Portal submits order to `REP_PORTAL_API`.
-2. API Management authenticates, authorizes, rate limits, and tracks analytics.
-3. API Management calls the standard SAP Sales Order API.
-4. S/4HANA returns the sales order response.
-5. Portal receives immediate order feedback.
+JSON Schema Validation is not used in the executable iFlow. The target SAP Integration Suite tenant did not provide a native JSON Schema Validator component. EDI Validator and XML Validator are not valid substitutes for JSON payload validation. Current POC validation is implemented through Groovy logic. JSON schema validation remains a future option depending on tenant capabilities and runtime availability.
 
-Skeleton artifacts:
+## 8. JMS Configuration
 
-- `openapi/sales-rep-portal-api.yaml`
-- `apim/README.md`
+JMS publication was successfully validated through runtime testing.
 
-## 6. Asynchronous Inbound Flow
+| Setting | Value |
+| --- | --- |
+| Queue | JMS_SO_INBOUND |
+| Access Type | Non-Exclusive |
+| Expiration Period | 30 Days |
+| Retention Alert Threshold | 2 Days |
+| Transfer Exchange Properties | Enabled |
+| Compress Stored Messages | Enabled |
+| Encrypt Stored Messages | Enabled |
 
-### IFL_SO_INBOUND
+HTTP 202 is returned only after successful JMS publication. JMS send failure returns HTTP 500 through the exception subprocess.
 
-Responsibilities:
+## 9. Monitoring Strategy
 
-- Validate JSON/XML structure.
-- Validate required fields per consumer contract.
-- Generate correlation ID when absent.
-- Enrich message with consumer metadata.
-- Build the JMS message envelope.
-- Publish to `JMS_SO_INBOUND`.
-- Return ACK with correlation ID.
+Payload logging is not performed for successful transactions. Success path monitoring uses standard MPL, correlationId, and queue monitoring. Error path monitoring uses exception subprocess, controlled error responses, and error context logging. This is intentional for operational best practices and payload minimization.
 
-### JMS_SO_INBOUND
+## 10. Security Strategy
 
-Configuration:
+Current POC uses OAuth2 Client Credentials against the Integration Suite Runtime Endpoint. Future production runtime keeps Integration Suite behind SAP API Management. API Management will provide OAuth enforcement, consumer separation, rate limiting, spike arrest, and analytics.
 
-- Queue: `JMS_SO_INBOUND`
-- Dead-letter queue: `DLQ_SO_INBOUND`
-- Persistence: enabled
-- TTL: 7 days
-- Max retries before DLQ: 3
+## 11. POC Decisions
 
-### IFL_SO_ORCHESTRATION
-
-Responsibilities:
-
-- Consume messages from `JMS_SO_INBOUND`.
-- Check idempotency before creating sales orders.
-- Transform canonical payload to SAP Sales Order API format.
-- Call standard SAP API `C_SALESORDERAPI_ORDERS`.
-- Classify response as success, validation, business, transient, or system failure.
-- Trigger callback flow when the consumer has a callback URL.
-
-### Sales Order Confirmation Processing
-
-Responsibilities:
-
-- Build callback payload.
-- Resolve consumer callback URL.
-- POST result to consumer endpoint.
-- Retry callback delivery up to five times.
-- Log final callback status with correlation ID.
-
-## 7. Contracts
-
-Required contracts:
-
-- `openapi/sales-order-inbound-api.yaml` for async inbound consumers.
-- `openapi/sales-rep-portal-api.yaml` for synchronous portal consumers.
-- `openapi/callback-notification-api.yaml` for callback payloads.
-- `openapi/schemas/sales-order-request.json` for common order payload structure.
-- `openapi/schemas/callback-payload.json` for confirmation callbacks.
-
-## 8. Error Model
-
-| Category | Retry | Handling |
+| Decision | Description | Reason |
 | --- | --- | --- |
-| VALIDATION | No | Return 400/422 or route to DLQ if discovered async. |
-| BUSINESS_RULE | No | Return business error or send failed callback. |
-| TRANSIENT | Yes | Retry with exponential backoff, then DLQ. |
-| SYSTEM | Yes | Retry with exponential backoff, then DLQ. |
-| AUTHENTICATION | No | Reject request and alert if repeated. |
+| D-001 | No CAP Layer | Approved architecture is APIM + Integration Suite + JMS + SAP Standard APIs |
+| D-002 | No payload logging on successful processing | Security and operational best practices |
+| D-003 | Header normalization immediately after HTTPS Sender | Runtime header propagation inconsistencies |
+| D-004 | JMS decoupling between inbound and orchestration layers | Resilience, replay capability, retry support, and consumer decoupling |
 
-Retry schedule:
+## 12. Build Sequence Status
 
-- Retry 1: 5 seconds
-- Retry 2: 25 seconds
-- Retry 3: 125 seconds
-
-## 9. Observability
-
-Every component must log these fields where applicable:
-
-- `correlationId`
-- `consumerId`
-- `apiProductName`
-- `idempotencyKey`
-- `processingStatus`
-- `salesOrderNumber`
-- `errorCategory`
-- `durationMs`
-- ISO 8601 timestamp
-
-Alerts:
-
-- DLQ depth greater than zero.
-- Processing latency greater than five minutes.
-- Error rate greater than five percent.
-- S/4HANA Sales Order API unavailable.
-
-## 10. Build Sequence
-
-1. Finalize OpenAPI contracts for asynchronous inbound, synchronous portal, and callbacks.
-2. Configure API products and policies in SAP API Management.
-3. Build `IFL_SO_INBOUND` validation, enrichment, and JMS publication.
-4. Configure `JMS_SO_INBOUND` and `DLQ_SO_INBOUND`.
-5. Build `IFL_SO_ORCHESTRATION` mapping and SAP API invocation.
-6. Add callback confirmation processing.
-7. Configure Integration Suite monitoring and Cloud ALM visibility.
-8. Document consumer onboarding and operations procedures.
+| Step | Status |
+| --- | --- |
+| Finalize OpenAPI contracts | Complete for POC |
+| Build IFL_SO_INBOUND | Complete and runtime validated |
+| Configure JMS_SO_INBOUND | Complete and runtime validated |
+| Build IFL_SO_ORCHESTRATION | Next phase |
+| Add callback confirmation processing | Future orchestration phase |
