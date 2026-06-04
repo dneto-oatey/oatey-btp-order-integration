@@ -2,57 +2,71 @@
 
 ## 1. Objective
 
-Document the actual POC implementation decisions for the Oatey SAP BTP inbound Sales Order integration. The approved architecture remains APIM + SAP Integration Suite + JMS + SAP standard Sales Order APIs.
+Document the final validated POC state for the Oatey SAP BTP inbound Sales Order integration. The approved architecture remains APIM + SAP Integration Suite + JMS + SAP standard Sales Order APIs.
 
-## 2. Implementation Status
+## 2. IFL_SO_INBOUND Status
 
-IFL_SO_INBOUND status: Completed.
+Status: COMPLETED.
 
 Validated in SAP Integration Suite runtime:
 
-| Capability | Status |
+| Capability | Result |
 | --- | --- |
-| HTTPS Endpoint | Validated |
-| OAuth Authentication | Validated |
-| Header Validation | Validated |
-| Correlation Handling | Validated |
-| JMS Publication | Validated |
-| HTTP 202 ACK Response | Validated |
-| Exception Subprocess | Validated |
-| Runtime Deployment | Validated |
+| Deployment | Successful |
+| OAuth authentication | Successful |
+| HTTPS endpoint | Operational |
+| Header validation | Operational |
+| Correlation ID preservation | Operational |
+| Correlation ID auto-generation | Operational |
+| Consumer fallback | Operational |
+| Idempotency fallback | Operational |
+| JMS publication | Operational |
+| ACK 202 response | Operational |
+| Exception subprocess | Operational |
 
 The inbound integration flow is operational and ready for orchestration phase implementation.
 
-## 3. Runtime Topology
+## 3. Validated Test Results
+
+| Scenario | Result | Status |
+| --- | --- | --- |
+| Happy Path | 202 ACCEPTED | PASS |
+| Missing X-Correlation-ID | UUID generated automatically | PASS |
+| Missing X-Consumer-ID | UNKNOWN_CONSUMER fallback | PASS |
+| Missing Idempotency-Key | Accepted with empty idempotency key | PASS |
+| Invalid Content-Type | Rejected | PASS |
+
+All scenarios above were successfully tested in the SAP Integration Suite runtime.
+
+## 4. Runtime Topology
 
 Consumer -> SAP API Management -> IFL_SO_INBOUND -> JMS_SO_INBOUND -> IFL_SO_ORCHESTRATION -> SAP standard Sales Order API -> Callback Notification.
 
-## 4. Correlation Strategy
+## 5. IFL_SO_INBOUND Responsibility
+
+Responsible for OAuth authentication, HTTPS endpoint, header validation, correlation handling, consumer identification, idempotency preservation, basic JSON validation, JMS publication, ACK response, and exception handling.
+
+Not responsible for SAP business validation, customer validation, material validation, pricing validation, partner determination, sales area validation, or sales order business rules.
+
+## 6. Correlation Strategy
 
 X-Correlation-ID is optional. IFL_SO_INBOUND preserves an incoming value when provided, generates a UUID when missing, returns correlationId in the ACK response, and uses correlationId for operational traceability.
 
-## 5. Idempotency Strategy
+## 7. Idempotency Strategy
 
-Idempotency-Key is optional in the current POC. Current inbound flow preserves idempotency key when provided but does not reject requests when missing. Idempotency validation is deferred to IFL_SO_ORCHESTRATION. Future production implementation may enforce mandatory idempotency.
+Idempotency-Key is optional in the current POC. Current inbound flow preserves idempotency key when provided but does not reject requests when missing. Missing Idempotency-Key is accepted with an empty idempotency key. Idempotency validation is deferred to IFL_SO_ORCHESTRATION. Future production implementation may enforce mandatory idempotency.
 
-## 6. Header Normalization Lessons Learned
+## 8. Header Handling Lessons Learned
 
-Inbound HTTP headers are not always consistently available throughout the CPI runtime. The implemented best practice is to capture inbound headers immediately after HTTPS Sender, store values as Exchange Properties, and use Exchange Properties throughout processing.
+Inbound HTTP headers were not consistently accessible throughout runtime processing. The final pattern is to capture Content-Type, X-Correlation-ID, X-Consumer-ID, and Idempotency-Key into Exchange Properties immediately after HTTPS Sender and use Exchange Properties during subsequent processing.
 
-| Header | Captured use |
-| --- | --- |
-| Content-Type | Mandatory application/json validation |
-| X-Correlation-ID | Preserve or generate UUID |
-| X-Consumer-ID | Optional POC value; UNKNOWN_CONSUMER fallback |
-| Idempotency-Key | Optional POC value; empty fallback |
+## 9. Validation Approach
 
-## 7. Validation Approach
+JSON Schema Validation is not used in the executable iFlow. Current POC validation is implemented through Groovy logic. SAP business validation is deferred to IFL_SO_ORCHESTRATION and the SAP Sales Order API. JSON schema validation remains a future option depending on tenant capabilities and runtime availability.
 
-JSON Schema Validation is not used in the executable iFlow. The target SAP Integration Suite tenant did not provide a native JSON Schema Validator component. EDI Validator and XML Validator are not valid substitutes for JSON payload validation. Current POC validation is implemented through Groovy logic. JSON schema validation remains a future option depending on tenant capabilities and runtime availability.
+## 10. JMS Validation
 
-## 8. JMS Configuration
-
-JMS publication was successfully validated through runtime testing.
+JMS publication to JMS_SO_INBOUND was successfully validated through runtime testing. Messages were successfully published and visible in JMS monitoring.
 
 | Setting | Value |
 | --- | --- |
@@ -64,31 +78,25 @@ JMS publication was successfully validated through runtime testing.
 | Compress Stored Messages | Enabled |
 | Encrypt Stored Messages | Enabled |
 
-HTTP 202 is returned only after successful JMS publication. JMS send failure returns HTTP 500 through the exception subprocess.
+## 11. Monitoring And Logging Strategy
 
-## 9. Monitoring Strategy
+SAP Integration Suite only exposes Script-added MPL properties when log level is Debug or Trace. Production uses INFO log level. Troubleshooting may temporarily use Debug or Trace. Normal operation does not depend on MPL custom properties.
 
-Payload logging is not performed for successful transactions. Success path monitoring uses standard MPL, correlationId, and queue monitoring. Error path monitoring uses exception subprocess, controlled error responses, and error context logging. This is intentional for operational best practices and payload minimization.
+Success path: no payload logging, only operational metadata. Error path: no payload persistence by default; use Trace mode for deep troubleshooting. Reasons: security, storage optimization, and operational best practices.
 
-## 10. Security Strategy
+## 12. POC Decisions
 
-Current POC uses OAuth2 Client Credentials against the Integration Suite Runtime Endpoint. Future production runtime keeps Integration Suite behind SAP API Management. API Management will provide OAuth enforcement, consumer separation, rate limiting, spike arrest, and analytics.
-
-## 11. POC Decisions
-
-| Decision | Description | Reason |
+| Decision | Title | Reason |
 | --- | --- | --- |
 | D-001 | No CAP Layer | Approved architecture is APIM + Integration Suite + JMS + SAP Standard APIs |
 | D-002 | No payload logging on successful processing | Security and operational best practices |
 | D-003 | Header normalization immediately after HTTPS Sender | Runtime header propagation inconsistencies |
 | D-004 | JMS decoupling between inbound and orchestration layers | Resilience, replay capability, retry support, and consumer decoupling |
+| D-005 | Business Validation Deferred to Orchestration Layer | Avoid duplication of SAP business logic inside Integration Suite and maintain Clean Core principles |
 
-## 12. Build Sequence Status
+## 13. Roadmap
 
-| Step | Status |
-| --- | --- |
-| Finalize OpenAPI contracts | Complete for POC |
-| Build IFL_SO_INBOUND | Complete and runtime validated |
-| Configure JMS_SO_INBOUND | Complete and runtime validated |
-| Build IFL_SO_ORCHESTRATION | Next phase |
-| Add callback confirmation processing | Future orchestration phase |
+| Phase | Scope | Status |
+| --- | --- | --- |
+| Current | IFL_SO_INBOUND | COMPLETED |
+| Next | IFL_SO_ORCHESTRATION | JMS consumption, idempotency enforcement, SAP Sales Order API invocation, retry strategy, DLQ strategy, callback notifications, and SAP business validation |
