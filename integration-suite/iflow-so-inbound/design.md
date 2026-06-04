@@ -2,24 +2,39 @@
 
 ## Purpose
 
-IFL_SO_INBOUND is the completed inbound POC iFlow for SAP Integration Suite. It receives SAP Sales Order API style JSON, normalizes headers into Exchange Properties, validates with Groovy, sends the original payload to JMS_SO_INBOUND, and returns HTTP 202 only after successful JMS publication.
+IFL_SO_INBOUND is the completed inbound POC iFlow for SAP Integration Suite. It receives SAP Sales Order API style JSON, normalizes headers into Exchange Properties, performs transport/integration validation, sends the original payload to JMS_SO_INBOUND, and returns HTTP 202 only after successful JMS publication.
 
-This iFlow does not call S/4HANA. IFL_SO_ORCHESTRATION consumes JMS_SO_INBOUND and will invoke the standard SAP Sales Order API in the next phase.
+This iFlow does not call S/4HANA. IFL_SO_ORCHESTRATION is responsible for consuming JMS_SO_INBOUND and invoking the standard SAP Sales Order API in the next phase.
 
-## Implementation Status
+## Status
 
-Status: Completed and runtime validated.
+Status: COMPLETED.
 
-| Capability | Status |
+| Runtime capability | Result |
 | --- | --- |
-| HTTPS Endpoint | Validated |
-| OAuth Authentication | Validated |
-| Header Validation | Validated |
-| Correlation Handling | Validated |
-| JMS Publication | Validated |
-| HTTP 202 ACK Response | Validated |
-| Exception Subprocess | Validated |
-| Runtime Deployment | Validated |
+| Deployment | Successful |
+| OAuth authentication | Successful |
+| HTTPS endpoint | Operational |
+| Header validation | Operational |
+| Correlation ID preservation | Operational |
+| Correlation ID auto-generation | Operational |
+| Consumer fallback | Operational |
+| Idempotency fallback | Operational |
+| JMS publication | Operational |
+| ACK 202 response | Operational |
+| Exception subprocess | Operational |
+
+## Validated Test Results
+
+All scenarios below were successfully tested in the SAP Integration Suite runtime.
+
+| Scenario | Result | Status |
+| --- | --- | --- |
+| Happy Path | 202 ACCEPTED | PASS |
+| Missing X-Correlation-ID | UUID generated automatically | PASS |
+| Missing X-Consumer-ID | UNKNOWN_CONSUMER fallback | PASS |
+| Missing Idempotency-Key | Accepted with empty idempotency key | PASS |
+| Invalid Content-Type | Rejected | PASS |
 
 ## Current Executable Flow
 
@@ -27,27 +42,32 @@ Start / HTTPS Sender -> CM_SetInitialProperties -> CM_SetHeaderValidationContext
 
 No JSON Schema Validation step is present in this executable flow.
 
-## Correlation Strategy
+## Responsibilities
 
-X-Correlation-ID is optional. The iFlow preserves an incoming value when provided and generates a UUID when missing. The ACK response returns correlationId and operations use correlationId for traceability.
+IFL_SO_INBOUND is responsible for OAuth authentication, HTTPS endpoint, header validation, correlation handling, consumer identification, idempotency preservation, basic JSON validation, JMS publication, ACK response, and exception handling.
 
-## Idempotency Strategy
+IFL_SO_INBOUND is not responsible for SAP business validation, customer validation, material validation, pricing validation, partner determination, sales area validation, or sales order business rules.
 
-Idempotency-Key is optional for the current POC. Current inbound flow preserves idempotency key when provided but does not reject requests when missing. Idempotency validation is deferred to IFL_SO_ORCHESTRATION. Future production may enforce mandatory idempotency.
+## Header Handling Lesson Learned
 
-## Header Handling Lessons Learned
+Inbound HTTP headers were not consistently accessible throughout runtime processing. The final pattern captures Content-Type, X-Correlation-ID, X-Consumer-ID, and Idempotency-Key into Exchange Properties immediately after HTTPS Sender and uses Exchange Properties during subsequent processing.
 
-Inbound HTTP headers are not always consistently available throughout the CPI runtime. The implemented best practice is to capture Content-Type, X-Correlation-ID, X-Consumer-ID, and Idempotency-Key immediately after HTTPS Sender and store them as Exchange Properties. Processing uses Exchange Properties instead of relying on direct HTTP header access.
+## Correlation And Idempotency
 
-## Validation Approach
+X-Correlation-ID is optional. Incoming values are preserved, missing values generate UUIDs, and ACK responses return correlationId.
 
-Payload validation is Groovy-based. JSON Schema Validation is not used because the target tenant did not provide a native JSON Schema Validator component. EDI Validator and XML Validator are not valid substitutes for JSON payload validation. JSON schema validation remains a future option depending on tenant capabilities and runtime availability.
+Idempotency-Key is optional for the POC. Current inbound flow preserves idempotency key when provided but does not reject requests when missing. Missing Idempotency-Key is accepted with an empty idempotency key. Idempotency enforcement is deferred to orchestration.
 
-## JMS Receiver Configuration
+## Validation Boundary
+
+The inbound flow validates only transport and integration concerns. Business validation is intentionally deferred to IFL_SO_ORCHESTRATION and SAP S/4HANA through the SAP Sales Order API.
+
+## JMS Validation
+
+JMS publication to JMS_SO_INBOUND was successfully validated through runtime testing. Messages were successfully published and visible in JMS monitoring.
 
 | JMS setting | Value |
 | --- | --- |
-| Pattern | One-way Send to JMS Receiver |
 | Queue | JMS_SO_INBOUND |
 | Access Type | Non-Exclusive |
 | Expiration Period | 30 Days |
@@ -56,22 +76,11 @@ Payload validation is Groovy-based. JSON Schema Validation is not used because t
 | Compress Stored Messages | Enabled |
 | Encrypt Stored Messages | Enabled |
 
-JMS publication was successfully validated through runtime testing. JMS send failure returns HTTP 500 through the exception subprocess.
+## Monitoring And Logging
 
-## ACK Response
+SAP Integration Suite only exposes Script-added MPL properties when log level is Debug or Trace. Production uses INFO log level. Troubleshooting may temporarily use Debug or Trace. Normal operation does not depend on MPL custom properties.
 
-ACK is returned only after successful Groovy validation and successful JMS publication.
-
-| Field | Value |
-| --- | --- |
-| HTTP status | 202 Accepted |
-| Content-Type | application/json |
-| correlationId | Preserved or generated correlation ID |
-| status | ACCEPTED |
-
-## Monitoring Strategy
-
-Payload logging is not performed for successful transactions. Success path monitoring uses standard MPL, correlationId, and queue monitoring. Error path monitoring uses exception subprocess, controlled error responses, and error context logging.
+Success path uses no payload logging and records only operational metadata. Error path uses controlled error responses and error context logging, with Trace mode reserved for deep troubleshooting.
 
 ## Architecture Guardrails
 
