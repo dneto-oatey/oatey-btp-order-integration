@@ -43,27 +43,28 @@ SAP Integration Suite script readiness checks require streaming Reader parsing, 
 
 Required implementation:
 
-    def reader = message.getBody(java.io.Reader)
-        def json = new JsonSlurper().parse(reader)
+```groovy
+def reader = message.getBody(java.io.Reader)
+def json = new JsonSlurper().parse(reader)
+```
 
-        The script must preserve the original message body for JMS publishing and must not call message.setBody before JMS Send.
+The script must preserve the original message body for JMS publishing and must not call message.setBody before JMS Send.
 
-        ## Payload Fields Checked By Groovy
+## Payload Fields Checked By Groovy
 
-        | Area | Fields |
-        | --- | --- |
-        | Header | SalesOrderType, SalesOrganization, DistributionChannel, OrganizationDivision, SoldToParty, PurchaseOrderByCustomer |
-        | Item | to_Item.results, Material, RequestedQuantity |
-        | Pricing | to_PricingElement.results |
-        | Optional | IncotermsClassification, to_Text.results |
+| Area | Fields |
+| --- | --- |
+| Header | SalesOrderType, SalesOrganization, DistributionChannel, OrganizationDivision, SoldToParty, PurchaseOrderByCustomer |
+| Item | to_Item.results, Material, RequestedQuantity |
+| Pricing | to_PricingElement.results |
+| Optional | IncotermsClassification, to_Text.results |
 
-        Validation depth may be expanded during build. Missing SoldToParty returns HTTP 422 when Groovy validation enforces it.
+Validation depth may be expanded during build. Missing SoldToParty returns HTTP 422 when Groovy validation enforces it.
 
-        ## JMS Preparation
+## JMS Preparation
 
-        GS_PrepareJmsMessage prepares metadata for one-way Send to JMS Receiver. Queue is JMS_SO_INBOUND, Access Type is Non-Exclusive, Retention is 7 days, Transfer Exchange Properties is Enabled, and Compression/Encryption are enabled if configured in tenant.
+GS_PrepareJmsMessage prepares metadata for one-way Send to JMS Receiver. Queue is JMS_SO_INBOUND, Access Type is Non-Exclusive, Retention is 7 days, Transfer Exchange Properties is Enabled, and Compression/Encryption are enabled if configured in tenant.
 
-        ## Exception Script
+## Exception Script
 
-        GS_BuildErrorContext sets errorCode, errorCategory, errorMessage, httpStatus, and validationStatus. The local exception subprocess returns JSON 400/422 for validation errors and 500 for technical/JMS errors. It must not publish to JMS.
-        
+GS_BuildErrorContext sets errorCode, errorCategory, errorMessage, httpStatus, and validationStatus. The local exception subprocess returns JSON 400/422 for validation errors and 500 for technical/JMS errors. It must not publish to JMS.
