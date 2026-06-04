@@ -2,13 +2,15 @@
 
 Purpose: standardize Integration Suite error handling, logging, retry classification, and DLQ routing.
 
+## IFL_SO_INBOUND Status
+
+Status: COMPLETED. The local exception subprocess was successfully validated in SAP Integration Suite runtime.
+
 ## IFL_SO_INBOUND Exception Subprocess
 
 Implemented local flow:
 
 Exception Subprocess -> GS_BuildErrorContext -> CM_SetErrorResponse -> End
-
-Rules:
 
 | Rule | Behavior |
 | --- | --- |
@@ -19,16 +21,18 @@ Rules:
 | Validation errors | Return 400 or 422 |
 | Technical/JMS errors | Return 500 |
 
-## Error Context Logging
+## Logging Strategy
 
-Required log fields: correlationId, consumerId, idempotencyKey when provided, flowName, processingStatus, errorCategory, errorCode, errorMessage, and timestamp.
+Success path: no payload logging, only operational metadata.
 
-Payload logging is not performed for successful transactions. Error path logging captures controlled error context without turning the integration flow into payload persistence.
+Error path: no payload persistence by default. Use Trace mode for deep troubleshooting.
 
-## Retry Classification
+Reasons: security, storage optimization, and operational best practices.
 
-Retry categories: TRANSIENT and SYSTEM.
+## Monitoring Lesson Learned
 
-Non-retry categories: VALIDATION, BUSINESS_RULE, AUTHENTICATION.
+SAP Integration Suite only exposes Script-added MPL properties when log level is Debug or Trace. Production uses INFO log level. Troubleshooting may temporarily use Debug or Trace. Normal operation does not depend on MPL custom properties.
 
-IFL_SO_INBOUND does not perform JMS retry orchestration. JMS decoupling and downstream replay/retry are handled in the orchestration and operations layer.
+## Responsibility Boundary
+
+IFL_SO_INBOUND handles transport and integration concerns. SAP business validation, customer validation, material validation, pricing validation, partner determination, sales area validation, and sales order business rules are deferred to IFL_SO_ORCHESTRATION and SAP S/4HANA.
