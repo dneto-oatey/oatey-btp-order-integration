@@ -4,11 +4,11 @@ API Management remains the planned production entry point for the approved Oatey
 
 ## Current POC Runtime
 
-The IFL_SO_INBOUND POC was validated directly against the SAP Integration Suite Runtime Endpoint using OAuth2 Client Credentials.
+IFL_SO_INBOUND was validated directly against the SAP Integration Suite Runtime Endpoint using OAuth2 Client Credentials. OAuth authentication, HTTPS endpoint access, header validation, JMS publication, and ACK 202 response were successfully tested.
 
 ## Future Production Runtime
 
-In production, Integration Suite remains behind SAP API Management. API Management will provide:
+In production, Integration Suite remains behind SAP API Management. API Management will provide OAuth enforcement, consumer separation, rate limiting, spike arrest, and analytics.
 
 | Capability | Owner |
 | --- | --- |
@@ -27,6 +27,10 @@ X-Consumer-ID is optional in the POC and defaults to UNKNOWN_CONSUMER. In future
 
 Idempotency-Key is optional in the POC. In future APIM runtime, consumers may provide it or APIM may generate it as a fallback. Future production may enforce mandatory idempotency.
 
+## Responsibility Boundary
+
+IFL_SO_INBOUND validates transport and integration concerns. SAP business validation remains the responsibility of IFL_SO_ORCHESTRATION, SAP Sales Order API, and SAP S/4HANA configuration.
+
 ## Out Of Scope For APIM
 
-APIM must not perform payload mapping, orchestration, retry processing, DLQ handling, payload persistence, CAP behavior, PostgreSQL behavior, Event Mesh behavior, or UI behavior.
+APIM must not perform payload mapping, orchestration, retry processing, DLQ handling, payload persistence, SAP business validation, CAP behavior, PostgreSQL behavior, Event Mesh behavior, or UI behavior.
