@@ -1,8 +1,8 @@
 import com.sap.gateway.ip.core.customdev.util.Message
 import groovy.json.JsonSlurper
+import java.io.Reader
 
 def Message processData(Message message) {
-    def body = message.getBody(String)
     def props = message.getProperties()
     def headers = message.getHeaders()
 
@@ -10,13 +10,10 @@ def Message processData(Message message) {
     def consumerId = value(props.get('consumerId')) ?: value(headers.get('consumerId')) ?: value(headers.get('X-Consumer-ID'))
     def idempotencyKey = value(props.get('idempotencyKey')) ?: value(headers.get('idempotencyKey')) ?: value(headers.get('Idempotency-Key'))
 
-    if (!body?.trim()) {
-        fail(message, 'VALIDATION_ERROR', 'MISSING_BODY', 'JMS message body is required for orchestration validation.', false)
-    }
-
     def payload
     try {
-        payload = new JsonSlurper().parseText(body)
+        Reader reader = message.getBody(java.io.Reader)
+        payload = new JsonSlurper().parse(reader)
     } catch (Exception e) {
         fail(message, 'VALIDATION_ERROR', 'INVALID_JSON', 'JMS message body is not valid JSON.', false)
     }
