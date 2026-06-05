@@ -2,7 +2,17 @@
 
 ## Purpose
 
-Groovy script behavior specification for IFL_SO_ORCHESTRATION. This document does not generate actual code.
+Groovy script behavior specification for IFL_SO_ORCHESTRATION. Actual SAP CPI compatible Groovy source files are available under `integration-suite/iflow-so-orchestration/scripts/`.
+
+## Generated Script Files
+
+| Script | Source file |
+| --- | --- |
+| GS_ValidateConsumedMessage | `scripts/GS_ValidateConsumedMessage.groovy` |
+| GS_PrepareSapSalesOrderRequest | `scripts/GS_PrepareSapSalesOrderRequest.groovy` |
+| GS_HandleSapResponse | `scripts/GS_HandleSapResponse.groovy` |
+| GS_PrepareCallbackPayload | `scripts/GS_PrepareCallbackPayload.groovy` |
+| GS_PrepareDlqPayload | `scripts/GS_PrepareDlqPayload.groovy` |
 
 ## GS_ValidateConsumedMessage
 
