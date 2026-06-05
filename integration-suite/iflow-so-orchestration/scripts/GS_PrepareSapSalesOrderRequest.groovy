@@ -1,11 +1,11 @@
 import com.sap.gateway.ip.core.customdev.util.Message
 import groovy.json.JsonSlurper
+import java.io.Reader
 
 def Message processData(Message message) {
-    def body = message.getBody(String)
-
     try {
-        def payload = new JsonSlurper().parseText(body)
+        Reader reader = message.getBody(java.io.Reader)
+        def payload = new JsonSlurper().parse(reader)
         if (!(payload instanceof Map)) {
             fail(message, 'TECHNICAL_ERROR', 'SAP_REQUEST_PREPARATION_FAILED', 'SAP Sales Order request payload is not a JSON object.', true)
         }
