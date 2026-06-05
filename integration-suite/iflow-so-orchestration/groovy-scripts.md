@@ -14,6 +14,10 @@ Groovy script behavior specification for IFL_SO_ORCHESTRATION. Actual SAP CPI co
 | GS_PrepareCallbackPayload | `scripts/GS_PrepareCallbackPayload.groovy` |
 | GS_PrepareDlqPayload | `scripts/GS_PrepareDlqPayload.groovy` |
 
+## SAP Upgrade Readiness
+
+Scripts that parse JSON use the SAP Integration Suite streaming-compatible pattern: `message.getBody(java.io.Reader)` with `new JsonSlurper().parse(reader)`. Do not use `JsonSlurper.parseText(message.getBody(String))`.
+
 ## GS_ValidateConsumedMessage
 
 | Area | Specification |
