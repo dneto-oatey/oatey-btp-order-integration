@@ -12,6 +12,7 @@ No `GS_BuildOrchestrationErrorContext` script exists. Enterprise error context c
 | --- | --- |
 | GS_ValidateConsumedMessage | `scripts/GS_ValidateConsumedMessage.groovy` |
 | GS_PrepareSapSalesOrderRequest | `scripts/GS_PrepareSapSalesOrderRequest.groovy` |
+| GS_ExtractCsrfToken | `scripts/GS_ExtractCsrfToken.groovy` |
 | GS_HandleSapResponse | `scripts/GS_HandleSapResponse.groovy` |
 | GS_PrepareCallbackPayload | `scripts/GS_PrepareCallbackPayload.groovy` |
 | GS_PrepareDlqPayload | `scripts/GS_PrepareDlqPayload.groovy` |
@@ -22,60 +23,38 @@ Scripts that parse JSON use the SAP Integration Suite streaming-compatible patte
 
 ## GS_ValidateConsumedMessage
 
-| Area | Specification |
-| --- | --- |
-| Purpose | Validate technical readiness of the JMS message before SAP API call |
-| Input | Original SAP Sales Order JSON body; correlationId, idempotencyKey, consumerId properties |
-| Output | validationStatus, processingStatus, itemCount, idempotencyWarning |
-| Failure behavior | Throw controlled VALIDATION_ERROR for invalid JSON, missing correlationId, missing consumerId, or unusable payload structure |
+Validates technical readiness of the JMS message before SAP API call. It does not duplicate SAP business validation.
 
 ## GS_PrepareSapSalesOrderRequest
 
+Prepares request context for API_SALES_ORDER_SRV without changing the SAP payload. The original SAP JSON is preserved.
+
+## GS_ExtractCsrfToken
+
 | Area | Specification |
 | --- | --- |
-| Purpose | Prepare request context for API_SALES_ORDER_SRV without changing the SAP payload |
-| Output | sapApiOperation, sapRequestPrepared, payloadPreservationMode, purchaseOrderByCustomer, soldToParty |
-| Rule | Preserve original SAP JSON and do not create a canonical model |
+| Purpose | Extract CSRF token and SAP session cookie from HTTP GET response |
+| Input | SAP GET response headers `x-csrf-token` and `set-cookie` |
+| Output properties | csrfToken, sapCookie |
+| Output headers | x-csrf-token, X-CSRF-Token, Cookie |
+| Failure behavior | Throw TECHNICAL_ERROR when token or cookie is missing |
+| Security | Never log CSRF token or SAP cookie to MPL |
 
 ## GS_HandleSapResponse
 
-| Area | Specification |
-| --- | --- |
-| Purpose | Classify SAP API response and extract SAP Sales Order number or SAP error context |
-| SAP 400, 409, 422 | SAP_BUSINESS_ERROR, non-retryable |
-| SAP 401, 403 | SAP_AUTH_CONFIG_ERROR |
-| SAP 408, 429, 500, 502, 503, 504 | SAP_TRANSIENT_ERROR, retryable |
+Classifies SAP response. SAP 400, 409, and 422 are SAP_BUSINESS_ERROR. SAP 401 and 403 are SAP_AUTH_CONFIG_ERROR. SAP 408, 429, 500, 502, 503, and 504 are SAP_TRANSIENT_ERROR.
 
 ## GS_PrepareCallbackPayload
 
-| Area | Specification |
-| --- | --- |
-| Purpose | Build SUCCESS or FAILED callback payload |
-| Required fields | correlationId, consumerId, status, processingTimestamp, salesOrderNumber on success, errors on failure |
+Builds SUCCESS or FAILED callback payload with correlationId, consumerId, status, processingTimestamp, salesOrderNumber on success, and errors on failure.
 
 ## GS_PrepareDlqPayload
 
-| Area | Specification |
-| --- | --- |
-| Purpose | Build complete enterprise-grade DLQ envelope and capture/classify current exception context |
-| Input | Original failed payload, CPI properties, CamelExceptionCaught when available |
-| Output | JSON DLQ envelope as message body |
-| Required envelope fields | sourceIFlow, sourceQueue, targetQueue, correlationId, consumerId, idempotencyKey, processingStatus, failureTimestamp, errorCategory, errorCode, errorMessage, sapResponseStatusCode, sapErrorCode, sapErrorMessage, retryAttempt, maxRetryCount, replayRequired, replayInstruction, originalPayload |
-| Security | Sanitize error fields; never expose credentials, Authorization headers, bearer tokens, passwords, or secrets |
-| Payload handling | Preserve originalPayload inside DLQ envelope only; do not log payload to MPL |
-| Idempotency | Missing idempotencyKey alone is not a DLQ reason; when routed for another failure, envelope includes empty idempotencyKey and replayInstruction requires idempotency review |
+Builds the complete enterprise-grade DLQ envelope and captures/classifies current exception context. Payload is preserved inside originalPayload in the DLQ envelope only and must not be logged to MPL.
 
-## DLQ Classification Rules
+## Runtime Validated HTTP Flow
 
-| Rule | Classification |
-| --- | --- |
-| Existing errorCategory exists | Preserve it |
-| SAP response status 400, 409, 422 | SAP_BUSINESS_ERROR |
-| SAP response status 401, 403 | SAP_AUTH_CONFIG_ERROR |
-| SAP response status 408, 429, 500, 502, 503, 504 | SAP_TRANSIENT_ERROR |
-| Exception message indicates timeout or connection failure | SAP_TRANSIENT_ERROR |
-| validationStatus FAILED or errorCode invalid JSON / missing metadata | VALIDATION_ERROR |
-| Otherwise | TECHNICAL_ERROR |
+HTTP Receiver is used instead of OData Receiver because the OData adapter attempted to parse the JSON deep insert payload as XML/Atom. CSRF token fetch, SAP session cookie handling, and HTTP POST to `/sap/opu/odata/sap/API_SALES_ORDER_SRV/A_SalesOrder` were runtime validated.
 
 ## Clean Core Alignment
 
