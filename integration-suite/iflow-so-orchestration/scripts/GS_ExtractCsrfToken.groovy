@@ -4,8 +4,8 @@ def Message processData(Message message) {
     def headers = message.getHeaders()
 
     def csrfToken = firstHeaderValue(headers, 'x-csrf-token') ?: firstHeaderValue(headers, 'X-CSRF-Token')
-    def setCookieHeader = firstHeaderValue(headers, 'set-cookie') ?: firstHeaderValue(headers, 'Set-Cookie')
-    def sapCookie = buildCookieHeader(setCookieHeader)
+    def setCookieValues = headerValues(headers, 'set-cookie') + headerValues(headers, 'Set-Cookie')
+    def sapCookie = buildCookieHeader(setCookieValues)
 
     if (!csrfToken) {
         fail(message, 'TECHNICAL_ERROR', 'MISSING_CSRF_TOKEN', 'SAP CSRF fetch response did not include x-csrf-token.', true)
@@ -27,38 +27,40 @@ def Message processData(Message message) {
 }
 
 def firstHeaderValue(Map headers, String name) {
-    def raw = headers.get(name)
-    if (raw == null) {
-        def match = headers.find { key, value -> key?.toString()?.equalsIgnoreCase(name) }
-        raw = match?.value
-    }
-    if (raw instanceof Collection) {
-        return raw.collect { value(it) }.find { it }
-    }
-    return value(raw)
+    return headerValues(headers, name).find { it } ?: ''
 }
 
-def buildCookieHeader(String setCookieHeader) {
-    if (!setCookieHeader) {
+def headerValues(Map headers, String name) {
+    def values = []
+    headers.each { key, raw ->
+        if (key?.toString()?.equalsIgnoreCase(name)) {
+            if (raw instanceof Collection) {
+                raw.each { item -> values.add(value(item)) }
+            } else {
+                values.add(value(raw))
+            }
+        }
+    }
+    return values.findAll { it }
+}
+
+def buildCookieHeader(Collection setCookieValues) {
+    if (!setCookieValues || setCookieValues.isEmpty()) {
         return ''
     }
 
     def cookies = []
-    def normalized = setCookieHeader.replaceAll(/\r?\n/, ',')
-    def parts = normalized.split(/,(?=\s*[^;,\s]+=)/)
-    parts.each { part ->
-        def cookiePair = value(part).split(';')[0]
-        if (cookiePair && !isSensitiveCookie(cookiePair)) {
-            cookies.add(cookiePair)
-        } else if (cookiePair) {
-            cookies.add(cookiePair)
+    setCookieValues.each { headerValue ->
+        def normalized = value(headerValue).replaceAll(/\r?\n/, ',')
+        def parts = normalized.split(/,(?=\s*[^;,\s]+=)/)
+        parts.each { part ->
+            def cookiePair = value(part).split(';')[0]
+            if (cookiePair) {
+                cookies.add(cookiePair)
+            }
         }
     }
-    return cookies.join('; ')
-}
-
-def isSensitiveCookie(String cookiePair) {
-    return false
+    return cookies.unique().join('; ')
 }
 
 def value(def input) {
