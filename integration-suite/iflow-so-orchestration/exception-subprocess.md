@@ -2,95 +2,52 @@
 
 ## Purpose
 
-Complete exception subprocess specification for IFL_SO_ORCHESTRATION. The subprocess classifies errors, determines retry behavior, prepares FAILED callbacks when appropriate, and routes terminal messages to DLQ_SO_INBOUND.
+Enterprise-grade exception subprocess specification for IFL_SO_ORCHESTRATION. The subprocess routes terminal failures to DLQ_SO_INBOUND using `GS_PrepareDlqPayload.groovy` as the single script responsible for final error classification and complete DLQ envelope construction.
 
-## Exception Flow
+No `GS_BuildOrchestrationErrorContext` script exists or should be created.
 
-Exception Start -> CM_SetFailedContext -> Router by errorCategory -> Retry / Callback / DLQ -> GS_PrepareDlqPayload -> CM_SetDlqContext -> Send to DLQ_SO_INBOUND -> End
+## Required Exception Flow
 
-## Category Matrix
+Exception Start -> CM_SetFailedContext -> GS_PrepareDlqPayload -> CM_SetDlqContext -> JMS Receiver DLQ_SO_INBOUND -> End
 
-| Category | Retry? | Callback? | DLQ? | Monitoring fields |
-| --- | --- | --- | --- | --- |
-| VALIDATION_ERROR | No | Only when consumer context exists | Yes | correlationId, consumerId, errorCode, errorMessage |
-| SAP_BUSINESS_ERROR | No blind retry | Yes, FAILED | Optional by operations policy | correlationId, consumerId, sapErrorCode, sapErrorMessage |
-| SAP_TRANSIENT_ERROR | Yes, until maxRetryCount | FAILED after exhaustion | Yes after exhaustion | correlationId, retryAttempt, errorCode, sapResponseStatusCode |
-| SAP_AUTH_CONFIG_ERROR | Limited | FAILED after terminal decision | Yes after exhaustion/terminal | correlationId, errorCode, sapResponseStatusCode |
-| CALLBACK_ERROR | Yes, callback retry policy | No recursive callback | Yes after exhaustion | correlationId, callbackStatus, errorCode |
-| TECHNICAL_ERROR | Conditional | FAILED if terminal and context exists | Yes if terminal | correlationId, errorCategory, errorCode, retryAttempt |
+## Responsibilities
 
-## VALIDATION_ERROR
-
-| Rule | Behavior |
+| Component | Responsibility |
 | --- | --- |
-| Retry? | No |
-| Callback? | Only if correlationId and consumerId are available |
-| DLQ? | Yes |
-| Examples | Missing body, invalid JSON, missing correlationId, missing consumerId, unusable structure |
-| Monitoring fields | correlationId, consumerId, errorCategory, errorCode, errorMessage, failureTimestamp |
+| Exception Start | Catch validation, SAP, callback, and technical runtime failures |
+| CM_SetFailedContext | Set initial error fields when available, such as processingStatus, failureTimestamp, errorCategory, errorCode, errorMessage, SAP error fields |
+| GS_PrepareDlqPayload | Capture current CPI exception context, classify missing error fields, sanitize sensitive values, build complete DLQ envelope, preserve original payload inside DLQ body |
+| CM_SetDlqContext | Set DLQ routing headers/properties only; do not rebuild DLQ body |
+| JMS Receiver DLQ_SO_INBOUND | Publish final DLQ envelope to DLQ_SO_INBOUND |
 
-Missing idempotencyKey is not a VALIDATION_ERROR in the POC. It is allowed, monitored as warning, and not routed to DLQ.
+## Enterprise Error Classification
 
-## SAP_BUSINESS_ERROR
+`GS_PrepareDlqPayload` applies final classification using this order:
 
-| Rule | Behavior |
+| Rule | Classification |
 | --- | --- |
-| Retry? | No blind retry |
-| Callback? | Yes, FAILED |
-| DLQ? | Optional by operations policy |
-| Examples | SAP 400, 409, 422 with business error payload |
-| Monitoring fields | correlationId, consumerId, sapErrorCode, sapErrorMessage, processingStatus |
+| Existing errorCategory is present | Preserve existing value |
+| SAP response status is 400, 409, or 422 | SAP_BUSINESS_ERROR |
+| SAP response status is 401 or 403 | SAP_AUTH_CONFIG_ERROR |
+| SAP response status is 408, 429, 500, 502, 503, or 504 | SAP_TRANSIENT_ERROR |
+| Current exception indicates timeout or connection failure | SAP_TRANSIENT_ERROR |
+| validationStatus is FAILED or errorCode indicates invalid JSON / missing metadata | VALIDATION_ERROR |
+| No rule matches | TECHNICAL_ERROR |
 
-SAP business validation belongs to SAP S/4HANA through API_SALES_ORDER_SRV.
+## DLQ Envelope
 
-## SAP_TRANSIENT_ERROR
+The DLQ message body is a JSON envelope built by `GS_PrepareDlqPayload` and must include sourceIFlow, sourceQueue, targetQueue, correlationId, consumerId, idempotencyKey, processingStatus, failureTimestamp, errorCategory, errorCode, errorMessage, sapResponseStatusCode, sapErrorCode, sapErrorMessage, retryAttempt, maxRetryCount, replayRequired, replayInstruction, and originalPayload.
 
-| Rule | Behavior |
-| --- | --- |
-| Retry? | Yes |
-| Callback? | FAILED after retry exhaustion |
-| DLQ? | Yes after retry exhaustion |
-| Examples | 408, 429, 500, 502, 503, 504, timeout, network failure |
-| Monitoring fields | correlationId, retryAttempt, maxRetryCount, errorCode, sapResponseStatusCode |
+`replayInstruction` must be: Reprocess only through IFL_SO_ORCHESTRATION after root cause validation and idempotency review.
 
-## SAP_AUTH_CONFIG_ERROR
+## Idempotency Rule
 
-| Rule | Behavior |
-| --- | --- |
-| Retry? | Limited; only when policy treats it as transient |
-| Callback? | FAILED after terminal decision |
-| DLQ? | Yes after exhaustion or terminal configuration failure |
-| Examples | 401, 403, credential alias missing, destination issue |
-| Monitoring fields | correlationId, sapResponseStatusCode, errorCode, credential alias reference |
+Missing idempotencyKey alone is not a DLQ reason. If another failure routes the message to DLQ and idempotencyKey is empty, the DLQ envelope must include `idempotencyKey` as an empty string and the replayInstruction must require idempotency review.
 
-Do not log credentials, tokens, passwords, or authorization headers.
+## Security And Logging
 
-## CALLBACK_ERROR
+Payload is allowed inside the DLQ envelope for replay support, but payload must not be logged to MPL. Credentials, Authorization headers, bearer tokens, passwords, and secrets must never be included in error fields or monitoring logs.
 
-| Rule | Behavior |
-| --- | --- |
-| Retry? | Yes, according to callback retry policy |
-| Callback? | No recursive callback |
-| DLQ? | Yes after callback retry exhaustion |
-| Examples | Callback endpoint 500, timeout, authentication failure |
-| Monitoring fields | correlationId, callbackStatus, callbackEndpointAlias, errorCode |
+## Clean Core Alignment
 
-## TECHNICAL_ERROR
-
-| Rule | Behavior |
-| --- | --- |
-| Retry? | Conditional based on safe retry classification |
-| Callback? | FAILED if terminal and context exists |
-| DLQ? | Yes when terminal |
-| Examples | Script failure, malformed SAP success response, adapter runtime error |
-| Monitoring fields | correlationId, errorCategory, errorCode, retryAttempt, failureTimestamp |
-
-## Idempotency POC Rule
-
-| Condition | Behavior |
-| --- | --- |
-| idempotencyKey present | Preserve and propagate as metadata |
-| idempotencyKey missing | Allowed in POC |
-| Monitoring | Log warning only |
-| DLQ | No DLQ routing for missing idempotencyKey alone |
-| Future production | May become mandatory after approved idempotency persistence is introduced |
+The subprocess does not introduce CAP, PostgreSQL, Event Mesh, RFC, BAPI, custom Z APIs, direct custom S/4 APIs, or custom persistence. SAP business validation remains in SAP S/4HANA through API_SALES_ORDER_SRV.
