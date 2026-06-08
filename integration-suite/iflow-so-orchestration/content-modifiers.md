@@ -4,6 +4,8 @@
 
 Build-ready Content Modifier matrix for SAP Integration Suite. Source Types use CPI terminology: Constant, Header, Property, Expression, XPath, JSONPath.
 
+No `GS_BuildOrchestrationErrorContext` script exists. CM_SetFailedContext may set initial error fields, but `GS_PrepareDlqPayload` is responsible for final error classification and DLQ envelope completeness.
+
 ## CM_ReadJmsMetadata
 
 | Action | Type | Name | Source Type | Source Value | Data Type |
@@ -47,14 +49,17 @@ Build-ready Content Modifier matrix for SAP Integration Suite. Source Types use 
 | --- | --- | --- | --- | --- | --- |
 | Update | Exchange Property | processingStatus | Constant | FAILED | java.lang.String |
 | Create | Exchange Property | failureTimestamp | Expression | current UTC timestamp | java.lang.String |
-| Create | Exchange Property | errorCategory | Property | errorCategory | java.lang.String |
-| Create | Exchange Property | errorCode | Property | errorCode | java.lang.String |
-| Create | Exchange Property | errorMessage | Property | errorMessage | java.lang.String |
-| Create | Exchange Property | sapErrorCode | Property | sapErrorCode | java.lang.String |
-| Create | Exchange Property | sapErrorMessage | Property | sapErrorMessage | java.lang.String |
+| Create | Exchange Property | errorCategory | Property | errorCategory, if available | java.lang.String |
+| Create | Exchange Property | errorCode | Property | errorCode, if available | java.lang.String |
+| Create | Exchange Property | errorMessage | Property | errorMessage, if available | java.lang.String |
+| Create | Exchange Property | sapResponseStatusCode | Property | sapResponseStatusCode, if available | java.lang.String |
+| Create | Exchange Property | sapErrorCode | Property | sapErrorCode, if available | java.lang.String |
+| Create | Exchange Property | sapErrorMessage | Property | sapErrorMessage, if available | java.lang.String |
 | Create | Message Header | SAP_MessageProcessingLogCustomStatus | Constant | FAILED | java.lang.String |
 
 ## CM_SetDlqContext
+
+CM_SetDlqContext runs after `GS_PrepareDlqPayload`. It must not rebuild or overwrite the DLQ JSON envelope body.
 
 | Action | Type | Name | Source Type | Source Value | Data Type |
 | --- | --- | --- | --- | --- | --- |
@@ -63,12 +68,15 @@ Build-ready Content Modifier matrix for SAP Integration Suite. Source Types use 
 | Create | Message Header | consumerId | Property | consumerId | java.lang.String |
 | Create | Message Header | errorCategory | Property | errorCategory | java.lang.String |
 | Create | Message Header | errorCode | Property | errorCode | java.lang.String |
-| Create | Message Header | errorMessage | Property | errorMessage | java.lang.String |
-| Create | Message Header | sapErrorCode | Property | sapErrorCode | java.lang.String |
+| Create | Message Header | sapResponseStatusCode | Property | sapResponseStatusCode | java.lang.String |
 | Create | Message Header | failureTimestamp | Property | failureTimestamp | java.lang.String |
 | Create | Message Header | dlqQueueName | Property | dlqQueueName | java.lang.String |
 | Update | Exchange Property | processingStatus | Constant | DLQ_ROUTED | java.lang.String |
 
 ## Idempotency Alignment
 
-Missing idempotencyKey must not trigger CM_SetDlqContext in the POC. It sets `idempotencyWarning = true` for monitoring only. Future production may enforce mandatory idempotency after an approved durable idempotency mechanism is introduced.
+Missing idempotencyKey must not trigger DLQ routing by itself. If another failure routes the message to DLQ and idempotencyKey is empty, `GS_PrepareDlqPayload` includes `idempotencyKey` as an empty string and replayInstruction requires idempotency review.
+
+## Logging
+
+Payload is allowed inside the DLQ envelope body only. Do not write originalPayload to MPL custom properties or logs.
