@@ -8,6 +8,14 @@ Manual SAP Integration Suite build guide for IFL_SO_ORCHESTRATION. This document
 
 JMS_SO_INBOUND -> IFL_SO_ORCHESTRATION -> SAP Standard Sales Order API -> Callback -> DLQ_SO_INBOUND
 
+## Enterprise Error Handling Decision
+
+No `GS_BuildOrchestrationErrorContext` script exists. The exception subprocess uses `GS_PrepareDlqPayload.groovy` to capture current CPI exception context, classify errors, sanitize sensitive values, and build the complete DLQ envelope.
+
+Required exception flow:
+
+Exception Start -> CM_SetFailedContext -> GS_PrepareDlqPayload -> CM_SetDlqContext -> JMS Receiver DLQ_SO_INBOUND -> End
+
 ## 1. Create iFlow
 
 | Field | Value |
@@ -47,11 +55,10 @@ JMS_SO_INBOUND -> IFL_SO_ORCHESTRATION -> SAP Standard Sales Order API -> Callba
 
 | Validation | Expected behavior |
 | --- | --- |
-| Body exists | Required |
-| Body is valid JSON | Required |
+| Body exists and is valid JSON | Required |
 | correlationId exists | Required by orchestration stage |
-| consumerId exists | Required as value or `UNKNOWN_CONSUMER` fallback |
-| idempotencyKey exists | Optional in POC; warning only when missing |
+| consumerId exists | Required as value or UNKNOWN_CONSUMER fallback |
+| idempotencyKey exists | Optional; warning only when missing |
 | Payload has usable SAP Sales Order structure | Required for SAP call |
 
 Do not validate customer, material, pricing, partner determination, sales area, or SAP business rules.
@@ -127,20 +134,24 @@ Do not validate customer, material, pricing, partner determination, sales area, 
 | Component | Configuration |
 | --- | --- |
 | Exception Start | Catch validation, SAP, callback, and technical errors |
-| CM_SetFailedContext | Set processingStatus, errorCategory, errorCode, errorMessage |
-| Router | Retryable vs terminal |
-| Callback path | Prepare FAILED callback when terminal and context exists |
-| DLQ path | Prepare DLQ payload and send to DLQ_SO_INBOUND |
+| CM_SetFailedContext | Set initial error fields when available; GS_PrepareDlqPayload finalizes classification |
+| GS_PrepareDlqPayload | Build complete DLQ envelope, capture exception context, sanitize sensitive fields, preserve original payload in DLQ body |
+| CM_SetDlqContext | Set DLQ routing headers/properties only |
+| JMS Receiver | Send DLQ envelope to DLQ_SO_INBOUND |
 
-## 12. Configure DLQ Sender
+## 12. Configure DLQ Receiver
 
 | Setting | Value |
 | --- | --- |
-| Adapter type | JMS |
+| Adapter type | JMS Receiver |
 | Queue | DLQ_SO_INBOUND |
-| Body | DLQ envelope with original payload and error context |
-| Headers | correlationId, idempotencyKey, consumerId, errorCategory, errorCode |
+| Body | JSON DLQ envelope from GS_PrepareDlqPayload |
+| Replay instruction | Reprocess only through IFL_SO_ORCHESTRATION after root cause validation and idempotency review |
 
 ## Logging
 
-Success path logs metadata only: correlationId, consumerId, idempotencyKey presence, SAP order number, processingStatus. Do not log full payload on success.
+Success path logs metadata only. Payload is allowed inside the DLQ envelope but must not be logged to MPL. Never log credentials, Authorization headers, bearer tokens, passwords, or secrets.
+
+## Clean Core Alignment
+
+Do not add CAP, PostgreSQL, Event Mesh, RFC, BAPI, custom Z APIs, direct custom S/4 APIs, UI, or custom persistence. SAP business validation remains in SAP S/4HANA through API_SALES_ORDER_SRV.
