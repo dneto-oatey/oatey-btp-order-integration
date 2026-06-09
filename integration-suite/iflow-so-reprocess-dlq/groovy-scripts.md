@@ -22,6 +22,22 @@ def Message processData(Message message)
 
 Where JSON parsing is required, scripts must use streaming-compatible parsing from a `Reader`. Payload content must not be logged to MPL.
 
+## Replay Error Handling Principle
+
+Replay validation and replay extraction problems must not rely on the Exception Subprocess.
+
+Scripts must return the message normally and set routing properties:
+
+| Property | Value |
+| --- | --- |
+| `replayEligible` | `false` |
+| `replayRejectionCode` | Controlled reason code |
+| `replayRejectionReason` | Meaningful operational reason |
+| `replayTarget` | `REJECTED_REPLAY_SO_INBOUND` |
+| `processingStatus` | `REPLAY_REJECTED` |
+
+The Router sends rejected messages to `REJECTED_REPLAY_SO_INBOUND`.
+
 ## GS_ValidateDlqReplayEligibility
 
 ### Purpose
@@ -113,14 +129,25 @@ Traceability input:
 
 ### Output
 
+When extraction succeeds:
+
 - Message body is set to `originalPayload` only.
 - Message headers are set for replay metadata and traceability.
 - `replayCount` is incremented by 1.
 - Exchange Property `processingStatus` is set to `ORIGINAL_PAYLOAD_EXTRACTED`.
 
-### Failure Behavior
+When `originalPayload` is missing:
 
-This script is expected to run only on the eligible route. If `originalPayload` is unavailable, the script sets controlled error properties and throws a replay extraction exception.
+| Property | Value |
+| --- | --- |
+| `replayEligible` | `false` |
+| `replayRejectionCode` | `MISSING_ORIGINAL_PAYLOAD` |
+| `replayRejectionReason` | `Unable to extract originalPayload from DLQ envelope` |
+| `replayTarget` | `REJECTED_REPLAY_SO_INBOUND` |
+| `originalPayloadExtractionStatus` | `FAILED` |
+| `processingStatus` | `REPLAY_REJECTED` |
+
+The script returns the message normally. It must not throw `RuntimeException` for extraction failures.
 
 ## GS_PrepareReplayRejectedPayload
 
@@ -130,7 +157,7 @@ Build a replay rejection JSON envelope for messages pulled from `DLQ_SO_INBOUND`
 
 ### Input
 
-Exchange Properties produced by `GS_ValidateDlqReplayEligibility`.
+Exchange Properties produced by `GS_ValidateDlqReplayEligibility` or `GS_ExtractOriginalPayloadFromDlq`.
 
 Primary input:
 
