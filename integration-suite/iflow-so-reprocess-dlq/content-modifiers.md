@@ -21,6 +21,7 @@ Purpose: prepare the extracted original Sales Order payload for requeue to `JMS_
 | Create | Message Header | `replaySource` | Constant | `DLQ_SO_INBOUND` | `java.lang.String` |
 | Create | Message Header | `replayTarget` | Constant | `JMS_SO_INBOUND` | `java.lang.String` |
 | Create | Message Header | `replayFlow` | Constant | `IFL_SO_REPROCESS_DLQ` | `java.lang.String` |
+| Create | Message Header | `replayCount` | Property | `replayCount` | `java.lang.String` |
 | Create | Exchange Property | `processingStatus` | Constant | `REQUEUED_TO_INBOUND` | `java.lang.String` |
 | Create | Exchange Property | `targetQueueName` | Constant | `JMS_SO_INBOUND` | `java.lang.String` |
 | Create | Exchange Property | `replayed` | Constant | `true` | `java.lang.String` |
@@ -28,9 +29,31 @@ Purpose: prepare the extracted original Sales Order payload for requeue to `JMS_
 | Create | Exchange Property | `replayTarget` | Constant | `JMS_SO_INBOUND` | `java.lang.String` |
 | Create | Exchange Property | `replayFlow` | Constant | `IFL_SO_REPROCESS_DLQ` | `java.lang.String` |
 
+## CM_SetReplayRejectedHeaders
+
+Purpose: prepare an ineligible DLQ message for routing to `REJECTED_REPLAY_SO_INBOUND` without losing the original DLQ envelope.
+
+| Action | Type | Name | Source Type | Source Value | Data Type |
+| --- | --- | --- | --- | --- | --- |
+| Create | Message Header | `correlationId` | Property | `correlationId` | `java.lang.String` |
+| Create | Message Header | `consumerId` | Property | `consumerId` | `java.lang.String` |
+| Create | Message Header | `idempotencyKey` | Property | `idempotencyKey` | `java.lang.String` |
+| Create | Message Header | `replayEligible` | Constant | `false` | `java.lang.String` |
+| Create | Message Header | `replayRejected` | Constant | `true` | `java.lang.String` |
+| Create | Message Header | `replayRejectedAt` | Property | `replayRejectedAt` | `java.lang.String` |
+| Create | Message Header | `replayRejectionReason` | Property | `replayRejectionReason` | `java.lang.String` |
+| Create | Message Header | `replaySource` | Constant | `DLQ_SO_INBOUND` | `java.lang.String` |
+| Create | Message Header | `replayTarget` | Constant | `REJECTED_REPLAY_SO_INBOUND` | `java.lang.String` |
+| Create | Message Header | `replayFlow` | Constant | `IFL_SO_REPROCESS_DLQ` | `java.lang.String` |
+| Create | Message Header | `replayCount` | Property | `replayCount` | `java.lang.String` |
+| Create | Exchange Property | `processingStatus` | Constant | `REPLAY_REJECTED_ROUTED` | `java.lang.String` |
+| Create | Exchange Property | `targetQueueName` | Constant | `REJECTED_REPLAY_SO_INBOUND` | `java.lang.String` |
+| Create | Exchange Property | `replayRejected` | Constant | `true` | `java.lang.String` |
+| Create | Exchange Property | `replayTarget` | Constant | `REJECTED_REPLAY_SO_INBOUND` | `java.lang.String` |
+
 ## Header Preservation
 
-The following values are preserved from the DLQ envelope and should be available as Exchange Properties before the Content Modifier executes:
+The following values are preserved from the DLQ envelope and should be available as Exchange Properties before the Content Modifiers execute:
 
 | Field | Source |
 | --- | --- |
@@ -38,15 +61,19 @@ The following values are preserved from the DLQ envelope and should be available
 | `consumerId` | DLQ envelope or `UNKNOWN_CONSUMER` fallback |
 | `idempotencyKey` | DLQ envelope, may be empty |
 | `originalPayload` | DLQ envelope |
-| `replayedAt` | Generated UTC timestamp |
+| `replayedAt` | Generated UTC timestamp on eligible route |
+| `replayRejectedAt` | Generated UTC timestamp on rejected route |
+| `replayCount` | Previous `replayCount + 1` on eligible route; original/default value on rejected route |
 
-## Payload Rule
+## Payload Rules
 
 `CM_PrepareRequeueToInbound` must set the outbound body to the `originalPayload` property only.
 
-The Content Modifier must not:
+`CM_SetReplayRejectedHeaders` must not replace the rejection JSON body created by `GS_PrepareReplayRejectedPayload`.
 
-- Add wrapper fields around the Sales Order payload.
+The Content Modifiers must not:
+
+- Add wrapper fields around the Sales Order payload on the eligible route.
 - Modify Sales Order header fields.
 - Modify Sales Order item fields.
 - Add replay metadata inside the Sales Order JSON body.
