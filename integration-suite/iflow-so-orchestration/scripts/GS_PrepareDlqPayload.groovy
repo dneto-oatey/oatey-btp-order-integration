@@ -10,6 +10,7 @@ final String REPLAY_INSTRUCTION = 'Reprocess only through IFL_SO_ORCHESTRATION a
 
 def Message processData(Message message) {
     def props = message.getProperties()
+    def headers = message.getHeaders()
     def originalPayload = value(message.getBody(String))
     def exception = props.get('CamelExceptionCaught') ?: props.get('CamelException')
     def exceptionMessage = sanitize(exception instanceof Throwable ? exception.getMessage() : value(exception))
@@ -22,6 +23,14 @@ def Message processData(Message message) {
     def errorMessage = sanitize(value(props.get('errorMessage')) ?: exceptionMessage ?: sapErrorMessage ?: 'Unhandled orchestration error routed to DLQ.')
     def validationStatus = value(props.get('validationStatus'))
     def errorCategory = classifyError(value(props.get('errorCategory')), sapResponseStatusCode, exceptionMessage, validationStatus, errorCode)
+
+    def replayCount = integerValue(firstAvailable(props, headers, 'replayCount'), 0)
+    def maxReplayCount = integerValue(firstAvailable(props, headers, 'maxReplayCount'), 1)
+    def replayed = value(firstAvailable(props, headers, 'replayed'))
+    def replayedAt = value(firstAvailable(props, headers, 'replayedAt'))
+    def replaySource = value(firstAvailable(props, headers, 'replaySource'))
+    def replayTarget = value(firstAvailable(props, headers, 'replayTarget'))
+    def replayFlow = value(firstAvailable(props, headers, 'replayFlow'))
 
     if (!errorCode) {
         errorCode = defaultErrorCode(errorCategory, sapResponseStatusCode)
@@ -46,8 +55,26 @@ def Message processData(Message message) {
         maxRetryCount        : value(props.get('maxRetryCount')),
         replayRequired       : true,
         replayInstruction    : REPLAY_INSTRUCTION,
+        replayCount          : replayCount,
+        maxReplayCount       : maxReplayCount,
         originalPayload      : originalPayload
     ]
+
+    if (replayed) {
+        dlqPayload.replayed = replayed
+    }
+    if (replayedAt) {
+        dlqPayload.replayedAt = replayedAt
+    }
+    if (replaySource) {
+        dlqPayload.replaySource = replaySource
+    }
+    if (replayTarget) {
+        dlqPayload.replayTarget = replayTarget
+    }
+    if (replayFlow) {
+        dlqPayload.replayFlow = replayFlow
+    }
 
     if (exceptionClass) {
         dlqPayload.exceptionClass = sanitize(exceptionClass)
@@ -59,6 +86,8 @@ def Message processData(Message message) {
     message.setProperty('errorCode', errorCode)
     message.setProperty('errorMessage', errorMessage)
     message.setProperty('failureTimestamp', dlqPayload.failureTimestamp)
+    message.setProperty('replayCount', String.valueOf(replayCount))
+    message.setProperty('maxReplayCount', String.valueOf(maxReplayCount))
     message.setProperty('dlqPayloadPrepared', 'true')
     return message
 }
@@ -98,6 +127,30 @@ def defaultErrorCode(String errorCategory, String statusCodeText) {
         return "${errorCategory}_${statusCode}"
     }
     return "${errorCategory}_UNSPECIFIED"
+}
+
+def firstAvailable(Map props, Map headers, String name) {
+    def propertyValue = props.get(name)
+    if (value(propertyValue)) {
+        return propertyValue
+    }
+    def headerValue = headers.get(name)
+    if (value(headerValue)) {
+        return headerValue
+    }
+    return null
+}
+
+def integerValue(def input, int defaultValue) {
+    try {
+        def text = value(input)
+        if (!text) {
+            return defaultValue
+        }
+        return text.toInteger()
+    } catch (Exception ignored) {
+        return defaultValue
+    }
 }
 
 def toInteger(String input) {
