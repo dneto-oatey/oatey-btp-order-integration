@@ -1,14 +1,9 @@
 import com.sap.gateway.ip.core.customdev.util.Message
-import groovy.json.JsonSlurper
-import java.io.Reader
+import java.time.Instant
 
 
 def Message processData(Message message) {
     String originalPayload = safeString(message.getProperty('originalPayload'))
-
-    if (originalPayload.length() == 0) {
-        originalPayload = extractOriginalPayloadFromBody(message)
-    }
 
     if (originalPayload.length() == 0) {
         failExtraction(message, 'MISSING_ORIGINAL_PAYLOAD', 'Unable to extract originalPayload from DLQ envelope')
@@ -17,7 +12,9 @@ def Message processData(Message message) {
     String correlationId = safeString(message.getProperty('correlationId'))
     String consumerId = safeString(message.getProperty('consumerId'))
     String idempotencyKey = safeString(message.getProperty('idempotencyKey'))
-    String replayedAt = safeString(message.getProperty('replayedAt'))
+    int previousReplayCount = integerValue(message.getProperty('replayCount'), 0)
+    int nextReplayCount = previousReplayCount + 1
+    String replayedAt = Instant.now().toString()
 
     if (consumerId.length() == 0) {
         consumerId = 'UNKNOWN_CONSUMER'
@@ -34,28 +31,21 @@ def Message processData(Message message) {
     headers.put('replaySource', 'DLQ_SO_INBOUND')
     headers.put('replayTarget', 'JMS_SO_INBOUND')
     headers.put('replayFlow', 'IFL_SO_REPROCESS_DLQ')
+    headers.put('replayCount', String.valueOf(nextReplayCount))
     message.setHeaders(headers)
 
     message.setProperty('consumerId', consumerId)
     message.setProperty('idempotencyKey', idempotencyKey)
+    message.setProperty('replayed', 'true')
+    message.setProperty('replayedAt', replayedAt)
+    message.setProperty('replaySource', 'DLQ_SO_INBOUND')
+    message.setProperty('replayTarget', 'JMS_SO_INBOUND')
+    message.setProperty('replayFlow', 'IFL_SO_REPROCESS_DLQ')
+    message.setProperty('replayCount', String.valueOf(nextReplayCount))
     message.setProperty('originalPayloadExtractionStatus', 'SUCCESS')
     message.setProperty('processingStatus', 'ORIGINAL_PAYLOAD_EXTRACTED')
 
     return message
-}
-
-
-String extractOriginalPayloadFromBody(Message message) {
-    try {
-        Reader reader = message.getBody(java.io.Reader)
-        def dlqEnvelope = new JsonSlurper().parse(reader)
-        if (dlqEnvelope instanceof Map) {
-            return safeString(dlqEnvelope.originalPayload)
-        }
-        return ''
-    } catch (Exception ignored) {
-        return ''
-    }
 }
 
 
@@ -64,6 +54,19 @@ String safeString(def value) {
         return ''
     }
     return String.valueOf(value).trim()
+}
+
+
+int integerValue(def value, int defaultValue) {
+    String text = safeString(value)
+    if (text.length() == 0) {
+        return defaultValue
+    }
+    try {
+        return Integer.parseInt(text)
+    } catch (Exception ignored) {
+        return defaultValue
+    }
 }
 
 
