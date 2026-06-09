@@ -4,12 +4,14 @@
 
 This guide describes how to manually build `IFL_SO_REPROCESS_DLQ` in SAP Integration Suite.
 
-The iFlow is used only for manual replay of reviewed DLQ Sales Order messages from `DLQ_SO_INBOUND` back to `JMS_SO_INBOUND`.
+The iFlow is used only for operations-controlled replay of reviewed DLQ Sales Order messages from `DLQ_SO_INBOUND` back to `JMS_SO_INBOUND`.
 
 ## Build Guardrails
 
-- Keep the iFlow stopped by default.
+- Keep the iFlow deployed but stopped by default.
 - Start manually only after operations review.
+- Stop immediately after the approved replay window.
+- Route ineligible messages to `REJECTED_REPLAY_SO_INBOUND`.
 - Do not call SAP directly.
 - Do not modify the Sales Order payload.
 - Do not log payload content to MPL.
@@ -20,9 +22,18 @@ The iFlow is used only for manual replay of reviewed DLQ Sales Order messages fr
 ```text
 JMS Sender DLQ_SO_INBOUND
 -> GS_ValidateDlqReplayEligibility
--> GS_ExtractOriginalPayloadFromDlq
--> CM_PrepareRequeueToInbound
--> JMS Receiver JMS_SO_INBOUND
+-> Router eligible vs rejected
+
+Eligible:
+  -> GS_ExtractOriginalPayloadFromDlq
+  -> CM_PrepareRequeueToInbound
+  -> JMS Receiver JMS_SO_INBOUND
+
+Rejected:
+  -> GS_PrepareReplayRejectedPayload
+  -> CM_SetReplayRejectedHeaders
+  -> JMS Receiver REJECTED_REPLAY_SO_INBOUND
+
 -> End
 ```
 
@@ -52,22 +63,44 @@ JMS Sender DLQ_SO_INBOUND
 | --- | --- |
 | Component | Groovy Script |
 | Script File | `scripts/GS_ValidateDlqReplayEligibility.groovy` |
-| Purpose | Validate DLQ envelope and replay eligibility |
+| Purpose | Validate DLQ envelope and set `replayEligible` |
 | Payload Logging | Not allowed |
 
 Required validation outcomes:
 
 | Condition | Expected Behavior |
 | --- | --- |
-| Invalid JSON envelope | Reject replay |
-| Missing `originalPayload` | Reject replay |
-| Missing `correlationId` | Reject replay |
+| Invalid JSON envelope | `replayEligible = false` |
+| Missing `originalPayload` | `replayEligible = false` |
+| Missing `correlationId` | `replayEligible = false` |
+| Missing `replayApproved` | Treat as `false`; `replayEligible = false` |
+| `replayApproved != true` | `replayEligible = false` |
+| Missing `replayCount` | Treat as `0` |
+| Missing `maxReplayCount` | Treat as `1` |
+| `replayCount >= maxReplayCount` | `replayEligible = false` |
+| `SAP_AUTH_CONFIG_ERROR` | `replayEligible = false` |
+| `VALIDATION_ERROR` | `replayEligible = false` unless `validationReplayApproved = true` |
+| `SAP_BUSINESS_ERROR` | `replayEligible = true` only when `businessCorrectionConfirmed = true` and `replayApproved = true` |
 | Missing `consumerId` | Set `UNKNOWN_CONSUMER` |
 | Missing `idempotencyKey` | Continue with empty value |
-| `replayRequired = false` | Reject replay |
-| `replayed = true` | Reject replay |
 
-## Step 4: Add `GS_ExtractOriginalPayloadFromDlq`
+The script must not throw exceptions for replay ineligibility. It must set:
+
+| Property | Value |
+| --- | --- |
+| `replayEligible` | `true` or `false` |
+| `replayRejectionReason` | Required when `replayEligible = false` |
+
+## Step 4: Add Router
+
+| Route | Condition |
+| --- | --- |
+| Eligible | `${property.replayEligible} = 'true'` |
+| Rejected | `${property.replayEligible} != 'true'` |
+
+## Step 5: Configure Eligible Route
+
+### Add `GS_ExtractOriginalPayloadFromDlq`
 
 | Setting | Value |
 | --- | --- |
@@ -76,9 +109,7 @@ Required validation outcomes:
 | Purpose | Replace body with `originalPayload` only |
 | Payload Mutation | No Sales Order field modification allowed |
 
-The outbound body after this step must be the original Sales Order JSON payload only.
-
-## Step 5: Add `CM_PrepareRequeueToInbound`
+### Add `CM_PrepareRequeueToInbound`
 
 | Setting | Value |
 | --- | --- |
@@ -86,9 +117,7 @@ The outbound body after this step must be the original Sales Order JSON payload 
 | Name | `CM_PrepareRequeueToInbound` |
 | Purpose | Set JMS headers and replay metadata before requeue |
 
-Use the matrix in `content-modifiers.md`.
-
-## Step 6: Configure JMS Receiver
+### Configure JMS Receiver
 
 | Setting | Value |
 | --- | --- |
@@ -99,6 +128,36 @@ Use the matrix in `content-modifiers.md`.
 | Body | Original Sales Order JSON payload |
 | Transfer Exchange Properties | Enabled when available |
 
+## Step 6: Configure Rejected Route
+
+### Add `GS_PrepareReplayRejectedPayload`
+
+| Setting | Value |
+| --- | --- |
+| Component | Groovy Script |
+| Script File | `scripts/GS_PrepareReplayRejectedPayload.groovy` |
+| Purpose | Preserve original DLQ envelope and add rejection metadata |
+| Payload Logging | Not allowed |
+
+### Add `CM_SetReplayRejectedHeaders`
+
+| Setting | Value |
+| --- | --- |
+| Component | Content Modifier |
+| Name | `CM_SetReplayRejectedHeaders` |
+| Purpose | Set headers/properties before routing to replay rejection queue |
+
+### Configure JMS Receiver
+
+| Setting | Value |
+| --- | --- |
+| Component | JMS Receiver |
+| Adapter Type | JMS |
+| Queue Name | `REJECTED_REPLAY_SO_INBOUND` |
+| Access Type | Non-Exclusive |
+| Body | Replay rejection JSON envelope |
+| Transfer Exchange Properties | Enabled when available |
+
 ## Step 7: Configure Monitoring
 
 | Field | Source |
@@ -106,11 +165,16 @@ Use the matrix in `content-modifiers.md`.
 | `correlationId` | Exchange Property |
 | `consumerId` | Exchange Property |
 | `idempotencyKey` | Exchange Property |
+| `replayEligible` | Exchange Property |
+| `replayRejectionReason` | Exchange Property |
 | `replayed` | Exchange Property/Header |
 | `replayedAt` | Exchange Property/Header |
+| `replayRejected` | Exchange Property/Header |
+| `replayRejectedAt` | Exchange Property/Header |
 | `replaySource` | Exchange Property/Header |
 | `replayTarget` | Exchange Property/Header |
 | `replayFlow` | Exchange Property/Header |
+| `replayCount` | Exchange Property/Header |
 | `processingStatus` | Exchange Property |
 
 Do not add payload body to MPL custom properties.
@@ -120,9 +184,11 @@ Do not add payload body to MPL custom properties.
 - [ ] iFlow deployed successfully.
 - [ ] iFlow is stopped after deployment.
 - [ ] JMS Sender queue is `DLQ_SO_INBOUND`.
-- [ ] JMS Receiver queue is `JMS_SO_INBOUND`.
+- [ ] Router uses `replayEligible` property.
+- [ ] Eligible route publishes to `JMS_SO_INBOUND`.
+- [ ] Rejected route publishes to `REJECTED_REPLAY_SO_INBOUND`.
 - [ ] Scripts are assigned in the correct sequence.
-- [ ] `CM_PrepareRequeueToInbound` uses `Create` actions only.
+- [ ] Content Modifiers use `Create` actions only.
 - [ ] Payload logging is disabled.
 - [ ] Operations replay procedure is documented.
 
@@ -130,12 +196,16 @@ Do not add payload body to MPL custom properties.
 
 1. Review the DLQ envelope in JMS monitoring.
 2. Confirm root cause is resolved.
-3. Confirm idempotency and duplicate-processing review is complete.
-4. Start `IFL_SO_REPROCESS_DLQ` manually.
-5. Monitor replayed message publication to `JMS_SO_INBOUND`.
-6. Confirm `IFL_SO_ORCHESTRATION` consumes the replayed message.
-7. Stop `IFL_SO_REPROCESS_DLQ` immediately after replay window.
+3. Set `replayApproved = true` only for approved messages.
+4. Confirm `replayCount < maxReplayCount`; default `maxReplayCount` is `1`.
+5. For `SAP_BUSINESS_ERROR`, set `businessCorrectionConfirmed = true` only after business/master data correction.
+6. For `VALIDATION_ERROR`, set `validationReplayApproved = true` only when replay is explicitly approved.
+7. Confirm idempotency and duplicate-processing review is complete.
+8. Start `IFL_SO_REPROCESS_DLQ` manually.
+9. Monitor eligible messages on `JMS_SO_INBOUND`.
+10. Monitor rejected messages on `REJECTED_REPLAY_SO_INBOUND`.
+11. Stop `IFL_SO_REPROCESS_DLQ` immediately after replay window.
 
 ## Expected Result
 
-The original Sales Order JSON payload is requeued to `JMS_SO_INBOUND` with replay metadata and preserved traceability fields. No SAP call occurs in this replay flow.
+Eligible messages are requeued to `JMS_SO_INBOUND` with the original Sales Order JSON body unchanged. Ineligible messages are routed to `REJECTED_REPLAY_SO_INBOUND` with the original DLQ envelope preserved and rejection metadata added. No SAP call occurs in this replay flow.
