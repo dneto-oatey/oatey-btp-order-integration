@@ -52,6 +52,20 @@ Builds SUCCESS or FAILED callback payload with correlationId, consumerId, status
 
 Builds the complete enterprise-grade DLQ envelope and captures/classifies current exception context. Payload is preserved inside originalPayload in the DLQ envelope only and must not be logged to MPL.
 
+Replay governance metadata is preserved in the DLQ envelope:
+
+| Field | Source | Default |
+| --- | --- | --- |
+| `replayCount` | Message property or header | `0` |
+| `maxReplayCount` | Message property or header | `1` |
+| `replayed` | Message property or header | Empty |
+| `replayedAt` | Message property or header | Empty |
+| `replaySource` | Message property or header | Empty |
+| `replayTarget` | Message property or header | Empty |
+| `replayFlow` | Message property or header | Empty |
+
+If a replayed message fails again, `GS_PrepareDlqPayload` must keep the incoming `replayCount` from the replayed message and must not reset it to `0`. This allows `IFL_SO_REPROCESS_DLQ` to enforce replay governance through `maxReplayCount`.
+
 ## Runtime Validated HTTP Flow
 
 HTTP Receiver is used instead of OData Receiver because the OData adapter attempted to parse the JSON deep insert payload as XML/Atom. CSRF token fetch, SAP session cookie handling, and HTTP POST to `/sap/opu/odata/sap/API_SALES_ORDER_SRV/A_SalesOrder` were runtime validated.
