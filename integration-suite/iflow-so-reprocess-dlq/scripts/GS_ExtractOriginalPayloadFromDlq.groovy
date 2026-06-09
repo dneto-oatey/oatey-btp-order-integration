@@ -6,7 +6,8 @@ def Message processData(Message message) {
     String originalPayload = safeString(message.getProperty('originalPayload'))
 
     if (originalPayload.length() == 0) {
-        failExtraction(message, 'MISSING_ORIGINAL_PAYLOAD', 'Unable to extract originalPayload from DLQ envelope')
+        markExtractionRejected(message, 'MISSING_ORIGINAL_PAYLOAD', 'Unable to extract originalPayload from DLQ envelope')
+        return message
     }
 
     String correlationId = safeString(message.getProperty('correlationId'))
@@ -70,10 +71,11 @@ int integerValue(def value, int defaultValue) {
 }
 
 
-void failExtraction(Message message, String errorCode, String errorMessage) {
-    message.setProperty('errorCategory', 'REPLAY_EXTRACTION_ERROR')
-    message.setProperty('errorCode', errorCode)
-    message.setProperty('errorMessage', errorMessage)
+void markExtractionRejected(Message message, String rejectionCode, String rejectionReason) {
+    message.setProperty('replayEligible', 'false')
+    message.setProperty('replayRejectionCode', rejectionCode)
+    message.setProperty('replayRejectionReason', rejectionReason)
+    message.setProperty('replayTarget', 'REJECTED_REPLAY_SO_INBOUND')
+    message.setProperty('originalPayloadExtractionStatus', 'FAILED')
     message.setProperty('processingStatus', 'REPLAY_REJECTED')
-    throw new RuntimeException(errorMessage)
 }
