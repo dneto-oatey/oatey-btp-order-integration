@@ -15,8 +15,14 @@ JMS Sender DLQ_SO_INBOUND
 
 Eligible:
   -> GS_ExtractOriginalPayloadFromDlq
-  -> CM_PrepareRequeueToInbound
-  -> JMS Receiver JMS_SO_INBOUND
+  -> Router extraction still eligible vs rejected
+     -> replayEligible = true:
+        CM_PrepareRequeueToInbound
+        JMS Receiver JMS_SO_INBOUND
+     -> otherwise:
+        GS_PrepareReplayRejectedPayload
+        CM_SetReplayRejectedHeaders
+        JMS Receiver REJECTED_REPLAY_SO_INBOUND
 
 Rejected:
   -> GS_PrepareReplayRejectedPayload
@@ -50,6 +56,7 @@ The iFlow remains JMS Sender based for now, but it must not be left running cont
 - Routing eligible messages to `JMS_SO_INBOUND`.
 - Routing ineligible messages to `REJECTED_REPLAY_SO_INBOUND`.
 - Extracting `originalPayload` from eligible DLQ envelopes.
+- Routing extraction failures to `REJECTED_REPLAY_SO_INBOUND`.
 - Republishing only the original Sales Order JSON payload to `JMS_SO_INBOUND`.
 - Preserving replay traceability fields:
   - `correlationId`
@@ -108,6 +115,8 @@ Messages without `replayApproved = true` must not be silently reprocessed. They 
 
 `GS_ValidateDlqReplayEligibility` must not throw exceptions for replay ineligibility. It sets `replayEligible` and `replayRejectionReason`; the Router controls the next step.
 
+`GS_ExtractOriginalPayloadFromDlq` must also avoid exceptions for replay extraction problems. If `originalPayload` is missing during extraction, it sets `replayEligible = false`, `replayRejectionCode = MISSING_ORIGINAL_PAYLOAD`, `replayTarget = REJECTED_REPLAY_SO_INBOUND`, and returns the message normally. A safety Router after extraction sends the message to the rejected replay path.
+
 ## Replay Metadata
 
 For eligible replay, the flow adds the following metadata.
@@ -129,7 +138,7 @@ For rejected replay, the flow routes the original DLQ envelope to `REJECTED_REPL
 | --- | --- |
 | `replayRejected` | `true` |
 | `replayRejectedAt` | Current UTC timestamp |
-| `replayRejectionReason` | Reason set by validation script |
+| `replayRejectionReason` | Reason set by validation or extraction script |
 | `replayFlow` | `IFL_SO_REPROCESS_DLQ` |
 
 ## Message Handling
@@ -139,6 +148,8 @@ The inbound DLQ envelope is parsed only to validate replay eligibility and extra
 Eligible route: the outbound message body to `JMS_SO_INBOUND` must be exactly the extracted `originalPayload` value. No canonical model is introduced, and no Sales Order field is modified.
 
 Rejected route: the outbound message body to `REJECTED_REPLAY_SO_INBOUND` is a JSON replay rejection envelope that preserves the original DLQ envelope and adds replay rejection metadata.
+
+Replay validation and extraction failures must never rely on the Exception Subprocess. They must be controlled through `replayEligible`, Router conditions, and the rejected replay route.
 
 ## JMS Configuration
 
