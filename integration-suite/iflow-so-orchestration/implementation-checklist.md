@@ -35,7 +35,6 @@ APIM
 - [ ] Preserve correlationId, idempotencyKey, and consumerId from JMS metadata.
 - [ ] Preserve replayCount and maxReplayCount from message metadata.
 - [ ] Do not duplicate SAP business validation in Integration Suite.
-- [ ] Do not introduce CAP.
 - [ ] Do not introduce PostgreSQL.
 - [ ] Do not introduce Event Mesh.
 - [ ] Do not introduce RFC.
@@ -86,23 +85,6 @@ Do not externalize runtime values: correlationId, consumerId, idempotencyKey, cs
 - [ ] `maxReplayCount` defaults to `1` when missing.
 - [ ] Replayed message failure preserves incoming `replayCount`; it does not reset to `0`.
 - [ ] Replay governance does not rely on JMS technical redelivery count.
-
-## CPI Component Build Checklist
-
-| Step | Component | Checklist |
-| --- | --- | --- |
-| 1 | JMS Sender | Consume original SAP Sales Order JSON from `JMS_SOURCE_QUEUE` |
-| 2 | CM_ReadJmsMetadata | Capture correlationId, idempotencyKey, consumerId, replay metadata, queue names, and runtime status |
-| 3 | GS_ValidateConsumedMessage | Validate technical readiness only |
-| 4 | GS_PrepareSapSalesOrderRequest | Preserve original SAP JSON and prepare request context |
-| 5 | CM_PrepareCsrfFetch | Set x-csrf-token Fetch, Accept application/json, and store sapRequestPayload |
-| 6 | HTTP GET Receiver | Fetch CSRF token and SAP session cookie from `SAP_BASE_PATH` |
-| 7 | GS_ExtractCsrfToken | Extract token/cookie, set csrfToken and sapCookie, prepare POST headers |
-| 8 | CM_PrepareSapPostRequest | Restore sapRequestPayload and set token, cookie, JSON, correlation, and idempotency headers |
-| 9 | HTTP POST Receiver | POST to `SAP_CREATE_PATH` using SAP standard API |
-| 10 | GS_HandleSapResponse | Classify SAP success, SAP business error, transient error, auth/config error, or technical error |
-| 11 | CM_SetSuccessContext | Set success metadata with Create actions only |
-| 12 | Exception Subprocess | Route failures through GS_PrepareDlqPayload and DLQ receiver |
 
 ## MPL Custom Headers
 
