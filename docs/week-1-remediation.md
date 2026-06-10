@@ -6,17 +6,17 @@ Applied the Week 1 review recommendations without changing the approved architec
 
 ## Changes Applied
 
-sales-order-inbound-api.yaml now explicitly includes X-Correlation-ID, Idempotency-Key, and X-Consumer-ID headers. It also includes 401 Unauthorized, 403 Forbidden, and 429 Too Many Requests responses for APIM policy outcomes.
+`sales-order-inbound-api.yaml` now explicitly includes `X-Correlation-ID`, `Idempotency-Key`, and `X-Consumer-ID` headers. It also includes 401 Unauthorized, 403 Forbidden, and 429 Too Many Requests responses for APIM policy outcomes.
 
-sales-rep-portal-api.yaml was reformatted from single-line JSON flow into multiline YAML flow style. It now includes X-Correlation-ID and Idempotency-Key headers and APIM policy responses.
+`sales-rep-portal-api.yaml` was reformatted from single-line JSON flow into multiline YAML flow style. It now includes `X-Correlation-ID` and `Idempotency-Key` headers and APIM policy responses.
 
-callback-notification-api.yaml now defines OAuth2 Client Credentials authentication, a security section, and an example callback payload.
+`callback-notification-api.yaml` defines OAuth2 Client Credentials authentication, a security section, and an example callback payload.
 
-duplicate-idempotency-key.json no longer treats idempotencyKey as a body field. test-payloads/README.md documents that Idempotency-Key is the authoritative HTTP header.
+`duplicate-idempotency-key.json` no longer treats `idempotencyKey` as a body field. `test-payloads/README.md` documents that `Idempotency-Key` is the authoritative HTTP header.
 
 ## Architecture Guardrails
 
-No CAP, PostgreSQL, Event Mesh, UI, or additional services were introduced.
+No PostgreSQL, Event Mesh, UI, or additional services were introduced.
 
 APIM remains responsible only for authentication, authorization, rate limiting, quotas, analytics, consumer separation, and policy enforcement.
 
