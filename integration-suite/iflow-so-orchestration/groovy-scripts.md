@@ -58,29 +58,7 @@ Builds the complete enterprise-grade DLQ envelope and captures/classifies curren
 2. Message property `originalPayload`
 3. Current message body as fallback
 
-The DLQ envelope must include:
-
-- `sourceIFlow`
-- `sourceQueue`
-- `targetQueue`
-- `correlationId`
-- `consumerId`
-- `idempotencyKey`
-- `processingStatus`
-- `failureTimestamp`
-- `errorCategory`
-- `errorCode`
-- `errorMessage`
-- `sapResponseStatusCode`
-- `sapErrorCode`
-- `sapErrorMessage`
-- `retryAttempt`
-- `maxRetryCount`
-- `replayRequired`
-- `replayInstruction`
-- `replayCount`
-- `maxReplayCount`
-- `originalPayload`
+The DLQ envelope must include source, queue, correlation, consumer, idempotency, processing, error, SAP response, retry, replay, and `originalPayload` fields.
 
 Replay governance metadata is preserved in the DLQ envelope:
 
@@ -94,22 +72,7 @@ Replay governance metadata is preserved in the DLQ envelope:
 | `replayTarget` | Message property or header | Empty |
 | `replayFlow` | Message property or header | Empty |
 
-If a replayed message fails again, `GS_PrepareDlqPayload` must keep the incoming `replayCount` from the replayed message and must not reset it to `0`. This allows `IFL_SO_REPROCESS_DLQ` to enforce replay governance through `maxReplayCount`.
-
-## MPL Custom Headers
-
-Orchestration custom headers:
-
-- `ConsumerID`
-- `correlationId`
-- `IdempotencyKey`
-- `processingStatus`
-- `errorCategory`
-- `sapResponseStatusCode`
-- `replayCount`
-- `maxReplayCount`
-
-`GS_LogBeforeJms` or `GS_SetMplCustomHeaders`, when present, must only add custom header properties when values exist. Empty values must not be written because MPL appends values and does not overwrite prior custom header values.
+If a replayed message fails again, `GS_PrepareDlqPayload` must keep the incoming `replayCount` from the replayed message and must not reset it to `0`.
 
 ## Runtime Validated HTTP Flow
 
@@ -117,4 +80,4 @@ HTTP Receiver is used instead of OData Receiver because the OData adapter attemp
 
 ## Clean Core Alignment
 
-Scripts do not introduce CAP, PostgreSQL, Event Mesh, RFC, BAPI, custom Z APIs, direct custom S/4 APIs, UI, or custom persistence. SAP business validation remains in SAP S/4HANA through `API_SALES_ORDER_SRV`.
+Scripts do not introduce PostgreSQL, Event Mesh, RFC, BAPI, custom Z APIs, direct custom S/4 APIs, UI, or custom persistence. SAP business validation remains in SAP S/4HANA through `API_SALES_ORDER_SRV`.
