@@ -154,7 +154,7 @@ Payload logging is not performed. Trace mode may be used temporarily for trouble
 
 ## Security And Architecture Guardrails
 
-The replay utility does not introduce CAP, PostgreSQL, Event Mesh, RFC, BAPI, custom Z APIs, custom persistence, or direct SAP calls. It does not modify the business payload during replay.
+The replay utility does not introduce PostgreSQL, Event Mesh, RFC, BAPI, custom Z APIs, custom persistence, or direct SAP calls. It does not modify the business payload during replay.
 
 ## Operational Runbook
 
