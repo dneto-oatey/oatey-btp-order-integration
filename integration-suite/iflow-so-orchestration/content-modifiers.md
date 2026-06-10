@@ -6,7 +6,7 @@ Build-ready Content Modifier matrix for SAP Integration Suite. Source Types use 
 
 Content Modifier actions use Create or Delete only. Do not use Update.
 
-No `GS_BuildOrchestrationErrorContext` script exists. CM_SetFailedContext may set initial error fields, but `GS_PrepareDlqPayload` is responsible for final error classification and DLQ envelope completeness.
+No `GS_BuildOrchestrationErrorContext` script exists. `CM_SetFailedContext` may set initial error fields, but `GS_PrepareDlqPayload` is responsible for final error classification, payload resolution, replay metadata preservation, and DLQ envelope completeness.
 
 ## CM_ReadJmsMetadata
 
@@ -15,6 +15,13 @@ No `GS_BuildOrchestrationErrorContext` script exists. CM_SetFailedContext may se
 | Create | Exchange Property | correlationId | Header | correlationId | java.lang.String |
 | Create | Exchange Property | idempotencyKey | Header | idempotencyKey | java.lang.String |
 | Create | Exchange Property | consumerId | Header | consumerId | java.lang.String |
+| Create | Exchange Property | replayCount | Header | replayCount | java.lang.String |
+| Create | Exchange Property | maxReplayCount | Header | maxReplayCount | java.lang.String |
+| Create | Exchange Property | replayed | Header | replayed | java.lang.String |
+| Create | Exchange Property | replayedAt | Header | replayedAt | java.lang.String |
+| Create | Exchange Property | replaySource | Header | replaySource | java.lang.String |
+| Create | Exchange Property | replayTarget | Header | replayTarget | java.lang.String |
+| Create | Exchange Property | replayFlow | Header | replayFlow | java.lang.String |
 | Create | Exchange Property | sourceQueueName | Property | JMS_SOURCE_QUEUE | java.lang.String |
 | Create | Exchange Property | dlqQueueName | Property | JMS_DLQ_QUEUE | java.lang.String |
 | Create | Exchange Property | orchestrationReceivedAt | Expression | current UTC timestamp | java.lang.String |
@@ -34,6 +41,8 @@ No `GS_BuildOrchestrationErrorContext` script exists. CM_SetFailedContext may se
 | Create | Exchange Property | sapLocationId | Property | SAP_LOCATION_ID | java.lang.String |
 | Create | Exchange Property | sapCredentialName | Property | SAP_CREDENTIAL_NAME | java.lang.String |
 | Create | Exchange Property | sapTimeoutMinutes | Property | SAP_TIMEOUT_MINUTES | java.lang.String |
+
+`CM_PrepareCsrfFetch` must preserve `sapRequestPayload` because the HTTP GET token fetch replaces the message body.
 
 ## CM_PrepareSapPostRequest
 
@@ -55,9 +64,11 @@ No `GS_BuildOrchestrationErrorContext` script exists. CM_SetFailedContext may se
 | --- | --- | --- | --- | --- | --- |
 | Create | Exchange Property | processingStatus | Constant | SUCCESS | java.lang.String |
 | Create | Exchange Property | sapSalesOrderNumber | Property | sapSalesOrderNumber | java.lang.String |
-| Create | Exchange Property | callbackStatus | Constant | PENDING | java.lang.String |
+| Create | Exchange Property | callbackStatus | Constant | NOT_IMPLEMENTED_CORE_PATH | java.lang.String |
 | Create | Exchange Property | completedAt | Expression | current UTC timestamp | java.lang.String |
 | Create | Message Header | SAP_MessageProcessingLogCustomStatus | Constant | SUCCESS | java.lang.String |
+
+Callback is optional and is not part of the validated core path.
 
 ## CM_SetFailedContext
 
@@ -75,7 +86,7 @@ No `GS_BuildOrchestrationErrorContext` script exists. CM_SetFailedContext may se
 
 ## CM_SetDlqContext
 
-CM_SetDlqContext runs after `GS_PrepareDlqPayload`. It must not rebuild or overwrite the DLQ JSON envelope body.
+`CM_SetDlqContext` runs after `GS_PrepareDlqPayload`. It must not rebuild or overwrite the DLQ JSON envelope body.
 
 | Action | Type | Name | Source Type | Source Value | Data Type |
 | --- | --- | --- | --- | --- | --- |
@@ -85,9 +96,30 @@ CM_SetDlqContext runs after `GS_PrepareDlqPayload`. It must not rebuild or overw
 | Create | Message Header | errorCategory | Property | errorCategory | java.lang.String |
 | Create | Message Header | errorCode | Property | errorCode | java.lang.String |
 | Create | Message Header | sapResponseStatusCode | Property | sapResponseStatusCode | java.lang.String |
+| Create | Message Header | replayCount | Property | replayCount | java.lang.String |
+| Create | Message Header | maxReplayCount | Property | maxReplayCount | java.lang.String |
 | Create | Message Header | failureTimestamp | Property | failureTimestamp | java.lang.String |
 | Create | Message Header | dlqQueueName | Property | dlqQueueName | java.lang.String |
 | Create | Exchange Property | processingStatus | Constant | DLQ_ROUTED | java.lang.String |
+
+## DLQ Envelope Notes
+
+`GS_PrepareDlqPayload` resolves `originalPayload` using this priority: `sapRequestPayload`, `originalPayload`, current message body. It includes `replayCount` and `maxReplayCount` in the DLQ envelope and preserves replay metadata when available.
+
+## MPL Custom Headers
+
+Orchestration custom headers:
+
+- `ConsumerID`
+- `correlationId`
+- `IdempotencyKey`
+- `processingStatus`
+- `errorCategory`
+- `sapResponseStatusCode`
+- `replayCount`
+- `maxReplayCount`
+
+`GS_LogBeforeJms` or `GS_SetMplCustomHeaders`, when present, must only add custom header properties when values exist. Empty values must not be written.
 
 ## Externalized Parameters
 
@@ -95,7 +127,7 @@ SAP_BASE_PATH, SAP_CREATE_PATH, SAP_PROXY_TYPE, SAP_LOCATION_ID, SAP_CREDENTIAL_
 
 ## Runtime Values Not Externalized
 
-correlationId, consumerId, idempotencyKey, csrfToken, sapCookie, sapRequestPayload, sapSalesOrderNumber, and errorMessage are runtime values and must not be externalized.
+correlationId, consumerId, idempotencyKey, csrfToken, sapCookie, sapRequestPayload, sapSalesOrderNumber, errorMessage, replayCount, and maxReplayCount are runtime values and must not be externalized.
 
 ## Logging
 
