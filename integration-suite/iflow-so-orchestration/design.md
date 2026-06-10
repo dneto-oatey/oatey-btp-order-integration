@@ -162,4 +162,4 @@ Business validation is performed by SAP S/4HANA through `API_SALES_ORDER_SRV`. `
 
 ## Architecture Guardrails
 
-Keep the flow aligned with Clean Core and SAP standard API usage. Do not introduce CAP, PostgreSQL, Event Mesh, RFC, BAPI, custom Z APIs, direct custom S/4 APIs, UI, or custom persistence. Success path logging is metadata-only and must not log the full payload to MPL.
+Keep the flow aligned with Clean Core and SAP standard API usage. Do not introduce PostgreSQL, Event Mesh, RFC, BAPI, custom Z APIs, direct custom S/4 APIs, UI, or custom persistence. Success path logging is metadata-only and must not log the full payload to MPL.
