@@ -24,7 +24,7 @@ DLQ_SO_INBOUND -> IFL_SO_REPROCESS_DLQ -> JMS_SO_INBOUND -> IFL_SO_ORCHESTRATION
 - Do not call SAP directly.
 - Do not modify the Sales Order payload.
 - Do not log payload content to MPL.
-- Do not introduce CAP, PostgreSQL, Event Mesh, RFC, BAPI, custom Z APIs, or custom persistence.
+- Do not introduce PostgreSQL, Event Mesh, RFC, BAPI, custom Z APIs, or custom persistence.
 
 ## Executable Flow
 
