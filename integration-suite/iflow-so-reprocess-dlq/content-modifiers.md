@@ -6,6 +6,15 @@ This document defines Content Modifier settings for `IFL_SO_REPROCESS_DLQ`.
 
 SAP Integration Suite Content Modifier actions must use `Create` or `Delete`. This replay iFlow uses `Create` only.
 
+## Router Configuration
+
+Router condition must use Simple Expression, not XPath.
+
+| Route | CPI Router Setting |
+| --- | --- |
+| Eligible | Simple Expression `${property.replayEligible} == 'true'` |
+| Rejected | Default / Otherwise |
+
 ## CM_PrepareRequeueToInbound
 
 Purpose: prepare the extracted original Sales Order payload for requeue to `JMS_SO_INBOUND` and attach replay metadata.
@@ -22,6 +31,7 @@ Purpose: prepare the extracted original Sales Order payload for requeue to `JMS_
 | Create | Message Header | `replayTarget` | Constant | `JMS_SO_INBOUND` | `java.lang.String` |
 | Create | Message Header | `replayFlow` | Constant | `IFL_SO_REPROCESS_DLQ` | `java.lang.String` |
 | Create | Message Header | `replayCount` | Property | `replayCount` | `java.lang.String` |
+| Create | Message Header | `maxReplayCount` | Property | `maxReplayCount` | `java.lang.String` |
 | Create | Exchange Property | `processingStatus` | Constant | `REQUEUED_TO_INBOUND` | `java.lang.String` |
 | Create | Exchange Property | `targetQueueName` | Constant | `JMS_SO_INBOUND` | `java.lang.String` |
 | Create | Exchange Property | `replayed` | Constant | `true` | `java.lang.String` |
@@ -41,11 +51,13 @@ Purpose: prepare an ineligible DLQ message for routing to `REJECTED_REPLAY_SO_IN
 | Create | Message Header | `replayEligible` | Constant | `false` | `java.lang.String` |
 | Create | Message Header | `replayRejected` | Constant | `true` | `java.lang.String` |
 | Create | Message Header | `replayRejectedAt` | Property | `replayRejectedAt` | `java.lang.String` |
+| Create | Message Header | `replayRejectionCode` | Property | `replayRejectionCode` | `java.lang.String` |
 | Create | Message Header | `replayRejectionReason` | Property | `replayRejectionReason` | `java.lang.String` |
 | Create | Message Header | `replaySource` | Constant | `DLQ_SO_INBOUND` | `java.lang.String` |
 | Create | Message Header | `replayTarget` | Constant | `REJECTED_REPLAY_SO_INBOUND` | `java.lang.String` |
 | Create | Message Header | `replayFlow` | Constant | `IFL_SO_REPROCESS_DLQ` | `java.lang.String` |
 | Create | Message Header | `replayCount` | Property | `replayCount` | `java.lang.String` |
+| Create | Message Header | `maxReplayCount` | Property | `maxReplayCount` | `java.lang.String` |
 | Create | Exchange Property | `processingStatus` | Constant | `REPLAY_REJECTED_ROUTED` | `java.lang.String` |
 | Create | Exchange Property | `targetQueueName` | Constant | `REJECTED_REPLAY_SO_INBOUND` | `java.lang.String` |
 | Create | Exchange Property | `replayRejected` | Constant | `true` | `java.lang.String` |
@@ -64,6 +76,25 @@ The following values are preserved from the DLQ envelope and should be available
 | `replayedAt` | Generated UTC timestamp on eligible route |
 | `replayRejectedAt` | Generated UTC timestamp on rejected route |
 | `replayCount` | Previous `replayCount + 1` on eligible route; original/default value on rejected route |
+| `maxReplayCount` | DLQ envelope or default `1` |
+
+## MPL Custom Headers
+
+Reprocess custom headers:
+
+- `ConsumerID`
+- `correlationId`
+- `IdempotencyKey`
+- `processingStatus`
+- `replayEligible`
+- `replayCount`
+- `maxReplayCount`
+- `replayTarget`
+- `replayRejectionCode`
+- `sapResponseStatusCode`
+- `validationStatus` when inherited
+
+`GS_LogBeforeJms` or `GS_SetMplCustomHeaders`, when present, must only add custom header properties when values exist. Empty values must not be written.
 
 ## Payload Rules
 
@@ -71,10 +102,4 @@ The following values are preserved from the DLQ envelope and should be available
 
 `CM_SetReplayRejectedHeaders` must not replace the rejection JSON body created by `GS_PrepareReplayRejectedPayload`.
 
-The Content Modifiers must not:
-
-- Add wrapper fields around the Sales Order payload on the eligible route.
-- Modify Sales Order header fields.
-- Modify Sales Order item fields.
-- Add replay metadata inside the Sales Order JSON body.
-- Log payload content to MPL.
+The Content Modifiers must not add replay metadata inside the Sales Order JSON body and must not log payload content to MPL.
