@@ -112,4 +112,4 @@ Payload is allowed inside the DLQ envelope for replay support, but payload must 
 
 ## Clean Core Alignment
 
-The subprocess does not introduce CAP, PostgreSQL, Event Mesh, RFC, BAPI, custom Z APIs, direct custom S/4 APIs, or custom persistence. SAP business validation remains in SAP S/4HANA through `API_SALES_ORDER_SRV`.
+The subprocess does not introduce PostgreSQL, Event Mesh, RFC, BAPI, custom Z APIs, direct custom S/4 APIs, or custom persistence. SAP business validation remains in SAP S/4HANA through `API_SALES_ORDER_SRV`.
