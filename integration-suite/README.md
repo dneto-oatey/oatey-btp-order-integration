@@ -1,45 +1,98 @@
 # Integration Suite
 
-Integration Suite hosts the approved inbound Sales Order runtime components for the Oatey POC.
+Integration Suite hosts the validated inbound Sales Order runtime components for Oatey.
 
-Runtime scope: IFL_SO_INBOUND validates transport and integration concerns, normalizes headers into Exchange Properties, sends accepted payloads to JMS_SO_INBOUND, and returns HTTP 202 only after successful JMS publication. IFL_SO_ORCHESTRATION is the next implementation phase and will consume JMS messages and call the standard SAP Sales Order API.
+## Current Validated Architecture
 
-## IFL_SO_INBOUND Status
+```text
+APIM
+-> IFL_SO_INBOUND
+-> JMS_SO_INBOUND
+-> IFL_SO_ORCHESTRATION
+-> SAP Standard API API_SALES_ORDER_SRV via HTTP Receiver
+-> DLQ_SO_INBOUND on failure
+-> Optional manual replay using IFL_SO_REPROCESS_DLQ
+   -> JMS_SO_INBOUND if replay eligible
+   -> REJECTED_REPLAY_SO_INBOUND if replay is not eligible
+```
 
-Status: COMPLETED.
+## Runtime Status
 
-Runtime validated: deployment, OAuth authentication, HTTPS endpoint, header validation, correlation ID preservation, correlation ID auto-generation, consumer fallback, idempotency fallback, JMS publication, ACK 202 response, and exception subprocess.
+| iFlow | Status | Runtime Role |
+| --- | --- | --- |
+| `IFL_SO_INBOUND` | Completed and runtime validated | HTTPS intake, transport validation, correlation handling, JMS publish, 202 async ACK |
+| `IFL_SO_ORCHESTRATION` | Runtime connectivity validated | JMS consumption, CSRF fetch, SAP HTTP POST to API_SALES_ORDER_SRV, DLQ routing on failure |
+| `IFL_SO_REPROCESS_DLQ` | Manual/ad hoc utility | Operations-controlled replay from `DLQ_SO_INBOUND` to `JMS_SO_INBOUND` or `REJECTED_REPLAY_SO_INBOUND` |
+
+## Key Implementation Decisions
+
+- `IFL_SO_ORCHESTRATION` uses HTTP Receiver instead of OData Receiver because the OData adapter attempted to parse JSON deep insert payloads as XML/Atom.
+- CSRF is handled explicitly with HTTP GET `/sap/opu/odata/sap/API_SALES_ORDER_SRV/`, `x-csrf-token = Fetch`, token extraction, SAP cookie extraction, and HTTP POST to `/sap/opu/odata/sap/API_SALES_ORDER_SRV/A_SalesOrder`.
+- `sapRequestPayload` is preserved before CSRF GET because the GET response replaces the message body.
+- `GS_PrepareDlqPayload` resolves `originalPayload` using this priority: `sapRequestPayload`, `originalPayload`, current message body.
+- DLQ replay governance is controlled by DLQ envelope metadata, not JMS technical redelivery count.
+- `IFL_SO_REPROCESS_DLQ` must remain Not Deployed by default, deployed only during an approved replay window, and undeployed immediately after replay completion.
 
 ## Validated Test Results
 
 | Scenario | Result | Status |
 | --- | --- | --- |
-| Happy Path | 202 ACCEPTED | PASS |
-| Missing X-Correlation-ID | UUID generated automatically | PASS |
-| Missing X-Consumer-ID | UNKNOWN_CONSUMER fallback | PASS |
-| Missing Idempotency-Key | Accepted with empty idempotency key | PASS |
-| Invalid Content-Type | Rejected | PASS |
+| Inbound accepts message and returns async response | HTTP 202 accepted after JMS publish | PASS |
+| Orchestration consumes `JMS_SO_INBOUND` | JMS consumption works | PASS |
+| CSRF token fetch | Token fetch works | PASS |
+| SAP session cookie handling | Cookie extraction and POST header preparation works | PASS |
+| SAP POST reaches API_SALES_ORDER_SRV | SAP returned business validation response | PASS |
+| DEV payload SAP response | `Sales area 1000 10 00 does not exist` | PASS |
+| Orchestration failure routing | Message routed to `DLQ_SO_INBOUND` | PASS |
+| Reprocess without replay approval | Routed to `REJECTED_REPLAY_SO_INBOUND` | PASS |
+| Reprocess missing `originalPayload` | Routed to `REJECTED_REPLAY_SO_INBOUND` | PASS |
+| Replay governance headers | Visible in MPL custom headers when populated | PASS |
+| Payload logging | No payload logged to MPL in normal/custom header logs | PASS |
+
+## MPL Custom Headers
+
+Scripts that set MPL custom headers must only add a custom header property when the value exists. Empty values must not be written because MPL appends values and does not overwrite previous custom header values.
+
+Inbound custom headers:
+
+- `ConsumerID`
+- `correlationId`
+- `IdempotencyKey`
+- `validationStatus`
+
+Orchestration custom headers:
+
+- `ConsumerID`
+- `correlationId`
+- `IdempotencyKey`
+- `processingStatus`
+- `errorCategory`
+- `sapResponseStatusCode`
+- `replayCount`
+- `maxReplayCount`
+
+Reprocess custom headers:
+
+- `ConsumerID`
+- `correlationId`
+- `IdempotencyKey`
+- `processingStatus`
+- `replayEligible`
+- `replayCount`
+- `maxReplayCount`
+- `replayTarget`
+- `replayRejectionCode`
+- `sapResponseStatusCode`
+- `validationStatus` when inherited
 
 ## Responsibility Boundary
 
-IFL_SO_INBOUND owns OAuth authentication, HTTPS endpoint, header validation, correlation handling, consumer identification, idempotency preservation, basic JSON validation, JMS publication, ACK response, and exception handling.
+`IFL_SO_INBOUND` owns transport and integration concerns only. SAP business validation remains in `IFL_SO_ORCHESTRATION` and SAP S/4HANA through `API_SALES_ORDER_SRV`.
 
-IFL_SO_INBOUND does not own SAP business validation, customer validation, material validation, pricing validation, partner determination, sales area validation, or sales order business rules. Those responsibilities move to IFL_SO_ORCHESTRATION and the SAP Sales Order API.
+`IFL_SO_ORCHESTRATION` invokes SAP standard APIs and classifies SAP responses. Callback remains optional and is not part of the validated core path.
 
-## Lessons Learned
+`IFL_SO_REPROCESS_DLQ` is a manual replay utility, not a continuously running runtime flow.
 
-Inbound HTTP headers were not consistently accessible throughout runtime processing. The adopted pattern is to capture Content-Type, X-Correlation-ID, X-Consumer-ID, and Idempotency-Key immediately after HTTPS Sender and use Exchange Properties throughout processing.
+## Guardrails
 
-SAP Integration Suite only exposes Script-added MPL properties when log level is Debug or Trace. Production uses INFO log level. Normal operation does not depend on MPL custom properties.
-
-## Logging Strategy
-
-Successful transactions do not perform payload logging. Error paths do not persist payloads by default. Trace mode is reserved for deep troubleshooting.
-
-## Next Phase
-
-Next phase: IFL_SO_ORCHESTRATION. Scope includes JMS consumption, idempotency enforcement, SAP Sales Order API invocation, retry strategy, DLQ strategy, callback notifications, and SAP business validation.
-
-## Out Of Scope
-
-No CAP, PostgreSQL, Event Mesh, UI, RFC, BAPI, custom Z service, custom S/4HANA core modification, canonical model, or payload persistence outside JMS.
+Keep Clean Core and SAP standard API usage. Do not introduce CAP, PostgreSQL, Event Mesh, RFC, BAPI, custom Z APIs, custom persistence, UI, or payload logging to MPL. Do not log CSRF token, SAP cookie, Authorization header, bearer token, password, or secrets.
