@@ -123,4 +123,4 @@ Success path logs metadata only. Payload is allowed inside the DLQ envelope but 
 
 ## Clean Core Alignment
 
-Do not add CAP, PostgreSQL, Event Mesh, RFC, BAPI, custom Z APIs, direct custom S/4 APIs, UI, or custom persistence. SAP business validation remains in SAP S/4HANA through `API_SALES_ORDER_SRV`.
+Do not add PostgreSQL, Event Mesh, RFC, BAPI, custom Z APIs, direct custom S/4 APIs, UI, or custom persistence. SAP business validation remains in SAP S/4HANA through `API_SALES_ORDER_SRV`.
