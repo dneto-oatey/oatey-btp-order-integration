@@ -2,11 +2,11 @@
 
 ## Purpose
 
-Manual SAP Integration Suite build guide for the runtime-validated IFL_SO_ORCHESTRATION implementation. This document is implementation-ready and keeps the approved architecture unchanged.
+Manual SAP Integration Suite build guide for the runtime-validated `IFL_SO_ORCHESTRATION` implementation. This document is implementation-ready and keeps the approved architecture unchanged.
 
 ## Runtime Validation Summary
 
-The iFlow uses HTTP Receiver instead of OData Receiver for SAP Sales Order creation. The OData adapter attempted to parse the JSON deep insert payload as XML/Atom. HTTP Receiver successfully reached SAP API_SALES_ORDER_SRV and SAP returned the functional business validation error `Sales area 1000 10 00 does not exist`, confirming connectivity and SAP API invocation.
+The iFlow uses HTTP Receiver instead of OData Receiver for SAP Sales Order creation. The OData adapter attempted to parse the JSON deep insert payload as XML/Atom. HTTP Receiver successfully reached SAP `API_SALES_ORDER_SRV` and SAP returned the functional business validation error `Sales area 1000 10 00 does not exist`, confirming connectivity and SAP API invocation.
 
 Validated:
 
@@ -17,16 +17,59 @@ Validated:
 | SAP session cookie handling | Working |
 | HTTP POST to API_SALES_ORDER_SRV | Working; reaches SAP API |
 | SAP business validation | Functional SAP error returned |
+| DLQ routing | Failed message routed to `DLQ_SO_INBOUND` |
 
 ## Runtime Flow
 
-JMS_SO_INBOUND -> CM_ReadJmsMetadata -> GS_ValidateConsumedMessage -> GS_PrepareSapSalesOrderRequest -> CM_PrepareCsrfFetch -> HTTP GET /sap/opu/odata/sap/API_SALES_ORDER_SRV/ with x-csrf-token Fetch -> GS_ExtractCsrfToken -> CM_PrepareSapPostRequest -> HTTP POST /sap/opu/odata/sap/API_SALES_ORDER_SRV/A_SalesOrder -> GS_HandleSapResponse -> CM_SetSuccessContext -> End
+```text
+JMS_SO_INBOUND
+-> CM_ReadJmsMetadata
+-> GS_ValidateConsumedMessage
+-> GS_PrepareSapSalesOrderRequest
+-> CM_PrepareCsrfFetch
+-> HTTP GET /sap/opu/odata/sap/API_SALES_ORDER_SRV/ with x-csrf-token Fetch
+-> GS_ExtractCsrfToken
+-> CM_PrepareSapPostRequest
+-> HTTP POST /sap/opu/odata/sap/API_SALES_ORDER_SRV/A_SalesOrder
+-> GS_HandleSapResponse
+-> CM_SetSuccessContext
+-> End
+```
 
 ## Exception Flow
 
-Exception Start -> CM_SetFailedContext -> GS_PrepareDlqPayload -> CM_SetDlqContext -> JMS Receiver DLQ_SO_INBOUND -> End
+```text
+Exception Start
+-> CM_SetFailedContext
+-> GS_PrepareDlqPayload
+-> CM_SetDlqContext
+-> JMS Receiver DLQ_SO_INBOUND
+-> End
+```
 
-No `GS_BuildOrchestrationErrorContext` script exists. `GS_PrepareDlqPayload.groovy` captures current CPI exception context, classifies errors, sanitizes sensitive values, and builds the complete DLQ envelope.
+No `GS_BuildOrchestrationErrorContext` script exists. `GS_PrepareDlqPayload.groovy` captures current CPI exception context, classifies errors, sanitizes sensitive values, preserves replay governance metadata, and builds the complete DLQ envelope.
+
+## CSRF Payload Preservation
+
+`CM_PrepareCsrfFetch` must save `sapRequestPayload = ${body}` before the HTTP GET token fetch because the GET response replaces the message body. `CM_PrepareSapPostRequest` restores the body from `sapRequestPayload` before POST.
+
+Never log CSRF token or SAP cookie to MPL.
+
+## DLQ Payload Resolution
+
+`GS_PrepareDlqPayload` resolves `originalPayload` using this priority:
+
+1. Message property `sapRequestPayload`
+2. Message property `originalPayload`
+3. Current message body as fallback
+
+The DLQ envelope must include `replayCount` and `maxReplayCount`. Defaults are `0` and `1` when missing.
+
+## Replay Governance
+
+`replayCount` and `maxReplayCount` are business replay governance metadata. Do not rely on JMS technical redelivery count for replay governance.
+
+If a replayed message fails again, keep the incoming `replayCount` in the new DLQ envelope. Do not reset it to `0`.
 
 ## Externalized Parameters
 
@@ -44,95 +87,35 @@ No `GS_BuildOrchestrationErrorContext` script exists. `GS_PrepareDlqPayload.groo
 
 Do not externalize runtime values: correlationId, consumerId, idempotencyKey, csrfToken, sapCookie, sapRequestPayload, sapSalesOrderNumber, or errorMessage.
 
-## 1. Configure JMS Sender
+## Build Steps
 
-| Setting | Value |
-| --- | --- |
-| Component | JMS Sender |
-| Adapter type | JMS |
-| Queue | Externalized `JMS_SOURCE_QUEUE` |
-| Message body | Original SAP Sales Order JSON |
-| Expected metadata | correlationId, idempotencyKey, consumerId |
+1. Configure JMS Sender on `JMS_SO_INBOUND`.
+2. Add `CM_ReadJmsMetadata`.
+3. Add `GS_ValidateConsumedMessage`.
+4. Add `GS_PrepareSapSalesOrderRequest`.
+5. Add `CM_PrepareCsrfFetch` and preserve `sapRequestPayload`.
+6. Configure HTTP GET CSRF fetch.
+7. Add `GS_ExtractCsrfToken`.
+8. Add `CM_PrepareSapPostRequest` and restore body from `sapRequestPayload`.
+9. Configure HTTP POST to `API_SALES_ORDER_SRV/A_SalesOrder`.
+10. Add `GS_HandleSapResponse`.
+11. Add `CM_SetSuccessContext`.
+12. Configure Exception Subprocess to build DLQ envelope and send to `DLQ_SO_INBOUND`.
 
-## 2. Add CM_ReadJmsMetadata
+## MPL Custom Headers
 
-Capture correlationId, idempotencyKey, consumerId, sourceQueueName, dlqQueueName, orchestrationReceivedAt, processingStatus, idempotency policy, and idempotency warning. Use Create action only.
+Orchestration custom headers:
 
-## 3. Add GS_ValidateConsumedMessage
+- `ConsumerID`
+- `correlationId`
+- `IdempotencyKey`
+- `processingStatus`
+- `errorCategory`
+- `sapResponseStatusCode`
+- `replayCount`
+- `maxReplayCount`
 
-Validate JSON and integration metadata only. Do not validate customer, material, pricing, partner determination, sales area, or SAP business rules.
-
-## 4. Add GS_PrepareSapSalesOrderRequest
-
-Preserve the original SAP Sales Order JSON body and set request context fields such as sapApiOperation, sapRequestPrepared, payloadPreservationMode, purchaseOrderByCustomer, and soldToParty.
-
-## 5. Add CM_PrepareCsrfFetch
-
-| Field | Value |
-| --- | --- |
-| Header x-csrf-token | Fetch |
-| Header Accept | application/json |
-| Exchange Property sapRequestPayload | `${body}` |
-
-The following receiver settings are externalized: SAP_BASE_PATH, SAP_PROXY_TYPE, SAP_LOCATION_ID, SAP_CREDENTIAL_NAME, SAP_TIMEOUT_MINUTES.
-
-## 6. Configure HTTP GET CSRF Fetch
-
-| Setting | Value |
-| --- | --- |
-| Receiver adapter type | HTTP |
-| Method | GET |
-| Path | Externalized `SAP_BASE_PATH` |
-| Header | x-csrf-token = Fetch |
-| Purpose | Retrieve CSRF token and SAP session cookie |
-
-## 7. Add GS_ExtractCsrfToken
-
-`GS_ExtractCsrfToken.groovy` extracts `x-csrf-token` and `set-cookie` from the SAP GET response, builds the Cookie header, sets properties `csrfToken` and `sapCookie`, and explicitly sets message headers `x-csrf-token`, `X-CSRF-Token`, and `Cookie` for POST compatibility.
-
-Never log token or cookie to MPL.
-
-## 8. Add CM_PrepareSapPostRequest
-
-| Field | Value |
-| --- | --- |
-| Body | `${property.sapRequestPayload}` |
-| Header x-csrf-token | Property csrfToken |
-| Header X-CSRF-Token | Property csrfToken when required by runtime |
-| Header Cookie | Property sapCookie |
-| Header Content-Type | application/json |
-| Header Accept | application/json |
-| Header X-Correlation-ID | Property correlationId |
-| Header Idempotency-Key | Property idempotencyKey |
-
-## 9. Configure HTTP POST Sales Order Create
-
-| Setting | Value |
-| --- | --- |
-| Receiver adapter type | HTTP |
-| Method | POST |
-| Path | Externalized `SAP_CREATE_PATH` |
-| Target API | API_SALES_ORDER_SRV / A_SalesOrder |
-| Authentication | Externalized `SAP_CREDENTIAL_NAME` |
-| Payload | Original SAP Sales Order JSON restored from sapRequestPayload |
-
-## 10. Add GS_HandleSapResponse
-
-Classify SAP response. SAP business validation errors such as `Sales area 1000 10 00 does not exist` prove that connectivity worked and SAP S/4HANA performed business validation.
-
-## 11. Add CM_SetSuccessContext
-
-Set processingStatus, sapSalesOrderNumber, callbackStatus, completedAt, and MPL custom status using Create action only.
-
-## 12. Configure Exception Subprocess
-
-| Component | Configuration |
-| --- | --- |
-| Exception Start | Catch validation, SAP, callback, and technical errors |
-| CM_SetFailedContext | Set initial error fields when available; GS_PrepareDlqPayload finalizes classification |
-| GS_PrepareDlqPayload | Build complete DLQ envelope, capture exception context, sanitize sensitive fields, preserve original payload in DLQ body |
-| CM_SetDlqContext | Set DLQ routing headers/properties only |
-| JMS Receiver | Send DLQ envelope to externalized `JMS_DLQ_QUEUE` |
+`GS_LogBeforeJms` or `GS_SetMplCustomHeaders`, when present, must only add custom header properties when values exist. Do not write empty custom header values.
 
 ## Logging
 
@@ -140,4 +123,4 @@ Success path logs metadata only. Payload is allowed inside the DLQ envelope but 
 
 ## Clean Core Alignment
 
-Do not add CAP, PostgreSQL, Event Mesh, RFC, BAPI, custom Z APIs, direct custom S/4 APIs, UI, or custom persistence. SAP business validation remains in SAP S/4HANA through API_SALES_ORDER_SRV.
+Do not add CAP, PostgreSQL, Event Mesh, RFC, BAPI, custom Z APIs, direct custom S/4 APIs, UI, or custom persistence. SAP business validation remains in SAP S/4HANA through `API_SALES_ORDER_SRV`.
