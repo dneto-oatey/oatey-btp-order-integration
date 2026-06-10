@@ -2,23 +2,32 @@
 
 ## Purpose
 
-Enterprise-grade exception subprocess specification for IFL_SO_ORCHESTRATION. The subprocess routes terminal failures to DLQ_SO_INBOUND using `GS_PrepareDlqPayload.groovy` as the single script responsible for final error classification and complete DLQ envelope construction.
+Enterprise-grade exception subprocess specification for `IFL_SO_ORCHESTRATION`. The subprocess routes terminal failures to `DLQ_SO_INBOUND` using `GS_PrepareDlqPayload.groovy` as the single script responsible for final error classification and complete DLQ envelope construction.
 
 No `GS_BuildOrchestrationErrorContext` script exists or should be created.
 
 ## Required Exception Flow
 
-Exception Start -> CM_SetFailedContext -> GS_PrepareDlqPayload -> CM_SetDlqContext -> JMS Receiver DLQ_SO_INBOUND -> End
+```text
+Exception Start
+-> CM_SetFailedContext
+-> GS_PrepareDlqPayload
+-> CM_SetDlqContext
+-> JMS Receiver DLQ_SO_INBOUND
+-> End
+```
 
 ## Responsibilities
 
 | Component | Responsibility |
 | --- | --- |
-| Exception Start | Catch validation, SAP, callback, and technical runtime failures |
+| Exception Start | Catch validation, SAP, and technical runtime failures |
 | CM_SetFailedContext | Set initial error fields when available, such as processingStatus, failureTimestamp, errorCategory, errorCode, errorMessage, SAP error fields |
-| GS_PrepareDlqPayload | Capture current CPI exception context, classify missing error fields, sanitize sensitive values, build complete DLQ envelope, preserve original payload inside DLQ body |
+| GS_PrepareDlqPayload | Capture current CPI exception context, classify missing error fields, sanitize sensitive values, resolve originalPayload, preserve replay governance metadata, build complete DLQ envelope |
 | CM_SetDlqContext | Set DLQ routing headers/properties only; do not rebuild DLQ body |
-| JMS Receiver DLQ_SO_INBOUND | Publish final DLQ envelope to DLQ_SO_INBOUND |
+| JMS Receiver DLQ_SO_INBOUND | Publish final DLQ envelope to `DLQ_SO_INBOUND` |
+
+Callback remains optional and is not part of the validated core exception path.
 
 ## Enterprise Error Classification
 
@@ -34,20 +43,73 @@ Exception Start -> CM_SetFailedContext -> GS_PrepareDlqPayload -> CM_SetDlqConte
 | validationStatus is FAILED or errorCode indicates invalid JSON / missing metadata | VALIDATION_ERROR |
 | No rule matches | TECHNICAL_ERROR |
 
+## Original Payload Resolution
+
+`GS_PrepareDlqPayload` resolves `originalPayload` using this priority:
+
+1. Message property `sapRequestPayload`
+2. Message property `originalPayload`
+3. Current message body as fallback
+
+This is required because CSRF GET replaces the body before SAP POST preparation.
+
 ## DLQ Envelope
 
-The DLQ message body is a JSON envelope built by `GS_PrepareDlqPayload` and must include sourceIFlow, sourceQueue, targetQueue, correlationId, consumerId, idempotencyKey, processingStatus, failureTimestamp, errorCategory, errorCode, errorMessage, sapResponseStatusCode, sapErrorCode, sapErrorMessage, retryAttempt, maxRetryCount, replayRequired, replayInstruction, and originalPayload.
+The DLQ message body is a JSON envelope built by `GS_PrepareDlqPayload` and must include:
+
+- `sourceIFlow`
+- `sourceQueue`
+- `targetQueue`
+- `correlationId`
+- `consumerId`
+- `idempotencyKey`
+- `processingStatus`
+- `failureTimestamp`
+- `errorCategory`
+- `errorCode`
+- `errorMessage`
+- `sapResponseStatusCode`
+- `sapErrorCode`
+- `sapErrorMessage`
+- `retryAttempt`
+- `maxRetryCount`
+- `replayRequired`
+- `replayInstruction`
+- `replayCount`
+- `maxReplayCount`
+- `originalPayload`
 
 `replayInstruction` must be: Reprocess only through IFL_SO_ORCHESTRATION after root cause validation and idempotency review.
+
+## Replay Governance
+
+`replayCount` defaults to `0` and `maxReplayCount` defaults to `1` when missing. Both are preserved through DLQ and replay. If a replayed message fails again, the new DLQ envelope must keep the incoming `replayCount` and must not reset it to `0`.
+
+Do not rely on JMS technical redelivery count for business replay governance.
 
 ## Idempotency Rule
 
 Missing idempotencyKey alone is not a DLQ reason. If another failure routes the message to DLQ and idempotencyKey is empty, the DLQ envelope must include `idempotencyKey` as an empty string and the replayInstruction must require idempotency review.
 
+## MPL Custom Headers
+
+Orchestration custom headers:
+
+- `ConsumerID`
+- `correlationId`
+- `IdempotencyKey`
+- `processingStatus`
+- `errorCategory`
+- `sapResponseStatusCode`
+- `replayCount`
+- `maxReplayCount`
+
+Only add custom header properties when values exist. Do not write empty values.
+
 ## Security And Logging
 
-Payload is allowed inside the DLQ envelope for replay support, but payload must not be logged to MPL. Credentials, Authorization headers, bearer tokens, passwords, and secrets must never be included in error fields or monitoring logs.
+Payload is allowed inside the DLQ envelope for replay support, but payload must not be logged to MPL. Credentials, Authorization headers, bearer tokens, CSRF token, SAP cookie, passwords, and secrets must never be included in error fields or monitoring logs.
 
 ## Clean Core Alignment
 
-The subprocess does not introduce CAP, PostgreSQL, Event Mesh, RFC, BAPI, custom Z APIs, direct custom S/4 APIs, or custom persistence. SAP business validation remains in SAP S/4HANA through API_SALES_ORDER_SRV.
+The subprocess does not introduce CAP, PostgreSQL, Event Mesh, RFC, BAPI, custom Z APIs, direct custom S/4 APIs, or custom persistence. SAP business validation remains in SAP S/4HANA through `API_SALES_ORDER_SRV`.
