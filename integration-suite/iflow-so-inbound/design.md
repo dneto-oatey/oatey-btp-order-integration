@@ -115,4 +115,4 @@ Success path uses no payload logging and records only operational metadata. Erro
 
 ## Architecture Guardrails
 
-No CAP, PostgreSQL, Event Mesh, UI, RFC, BAPI, custom Z services, S/4HANA calls inside `IFL_SO_INBOUND`, canonical model, or payload persistence outside JMS.
+No PostgreSQL, Event Mesh, UI, RFC, BAPI, custom Z services, S/4HANA calls inside `IFL_SO_INBOUND`, canonical model, or payload persistence outside JMS.
