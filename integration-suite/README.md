@@ -95,4 +95,4 @@ Reprocess custom headers:
 
 ## Guardrails
 
-Keep Clean Core and SAP standard API usage. Do not introduce CAP, PostgreSQL, Event Mesh, RFC, BAPI, custom Z APIs, custom persistence, UI, or payload logging to MPL. Do not log CSRF token, SAP cookie, Authorization header, bearer token, password, or secrets.
+Keep Clean Core and SAP standard API usage. Do not introduce PostgreSQL, Event Mesh, RFC, BAPI, custom Z APIs, custom persistence, UI, or payload logging to MPL. Do not log CSRF token, SAP cookie, Authorization header, bearer token, password, or secrets.
