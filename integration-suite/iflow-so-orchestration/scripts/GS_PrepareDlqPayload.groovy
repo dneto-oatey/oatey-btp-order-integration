@@ -11,7 +11,7 @@ final String REPLAY_INSTRUCTION = 'Reprocess only through IFL_SO_ORCHESTRATION a
 def Message processData(Message message) {
     def props = message.getProperties()
     def headers = message.getHeaders()
-    def originalPayload = value(message.getBody(String))
+    def originalPayload = value(props.get('sapRequestPayload')) ?: value(props.get('originalPayload')) ?: value(message.getBody(String))
     def exception = props.get('CamelExceptionCaught') ?: props.get('CamelException')
     def exceptionMessage = sanitize(exception instanceof Throwable ? exception.getMessage() : value(exception))
     def exceptionClass = exception instanceof Throwable ? value(exception.getClass().getName()) : ''
