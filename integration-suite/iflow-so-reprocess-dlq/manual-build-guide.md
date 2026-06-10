@@ -2,15 +2,24 @@
 
 ## Purpose
 
-This guide describes how to manually build `IFL_SO_REPROCESS_DLQ` in SAP Integration Suite.
+Manual SAP Integration Suite build guide for `IFL_SO_REPROCESS_DLQ`.
 
 The iFlow is used only for operations-controlled replay of reviewed DLQ Sales Order messages from `DLQ_SO_INBOUND` back to `JMS_SO_INBOUND`.
 
+## Operational Deployment Rule
+
+`IFL_SO_REPROCESS_DLQ` must remain Not Deployed by default.
+
+Deploy only during an approved replay window. Undeploy immediately after replay completion.
+
+Reason: if left active, it may create an operational loop:
+
+```text
+DLQ_SO_INBOUND -> IFL_SO_REPROCESS_DLQ -> JMS_SO_INBOUND -> IFL_SO_ORCHESTRATION -> DLQ_SO_INBOUND
+```
+
 ## Build Guardrails
 
-- Keep the iFlow deployed but stopped by default.
-- Start manually only after operations review.
-- Stop immediately after the approved replay window.
 - Route ineligible messages to `REJECTED_REPLAY_SO_INBOUND`.
 - Do not call SAP directly.
 - Do not modify the Sales Order payload.
@@ -21,21 +30,34 @@ The iFlow is used only for operations-controlled replay of reviewed DLQ Sales Or
 
 ```text
 JMS Sender DLQ_SO_INBOUND
+-> GS_SetMplCustomHeaders or GS_LogBeforeJms when present
 -> GS_ValidateDlqReplayEligibility
 -> Router eligible vs rejected
 
 Eligible:
   -> GS_ExtractOriginalPayloadFromDlq
+  -> optional safety Router if replayEligible changed during extraction
   -> CM_PrepareRequeueToInbound
+  -> GS_SetMplCustomHeaders or GS_LogBeforeJms when present
   -> JMS Receiver JMS_SO_INBOUND
 
 Rejected:
   -> GS_PrepareReplayRejectedPayload
   -> CM_SetReplayRejectedHeaders
+  -> GS_SetMplCustomHeaders or GS_LogBeforeJms when present
   -> JMS Receiver REJECTED_REPLAY_SO_INBOUND
 
 -> End
 ```
+
+## Router Configuration
+
+Router condition must use Simple Expression, not XPath.
+
+| Route | CPI Router Setting |
+| --- | --- |
+| Eligible | Simple Expression `${property.replayEligible} == 'true'` |
+| Rejected | Default / Otherwise |
 
 ## Step 1: Create Package And iFlow
 
@@ -43,8 +65,9 @@ Rejected:
 | --- | --- |
 | Package | Oatey Sales Order Integration |
 | iFlow Name | `IFL_SO_REPROCESS_DLQ` |
-| Runtime State | Deployed but stopped by default |
-| Purpose | Manual replay from `DLQ_SO_INBOUND` to `JMS_SO_INBOUND` |
+| Runtime State | Not Deployed by default |
+| Deployment Model | Deploy only during approved replay window; undeploy immediately after completion |
+| Purpose | Manual replay from `DLQ_SO_INBOUND` to `JMS_SO_INBOUND` or `REJECTED_REPLAY_SO_INBOUND` |
 
 ## Step 2: Configure JMS Sender
 
@@ -55,18 +78,11 @@ Rejected:
 | Queue Name | `DLQ_SO_INBOUND` |
 | Access Type | Non-Exclusive |
 | Processing Mode | Manual replay utility |
-| Start Condition | Operations-approved replay window only |
+| Deployment Condition | Operations-approved replay window only |
 
 ## Step 3: Add `GS_ValidateDlqReplayEligibility`
 
-| Setting | Value |
-| --- | --- |
-| Component | Groovy Script |
-| Script File | `scripts/GS_ValidateDlqReplayEligibility.groovy` |
-| Purpose | Validate DLQ envelope and set `replayEligible` |
-| Payload Logging | Not allowed |
-
-Required validation outcomes:
+The script must not throw exceptions for replay ineligibility. It must set `replayEligible` and `replayRejectionReason`.
 
 | Condition | Expected Behavior |
 | --- | --- |
@@ -81,118 +97,45 @@ Required validation outcomes:
 | `SAP_AUTH_CONFIG_ERROR` | `replayEligible = false` |
 | `VALIDATION_ERROR` | `replayEligible = false` unless `validationReplayApproved = true` |
 | `SAP_BUSINESS_ERROR` | `replayEligible = true` only when `businessCorrectionConfirmed = true` and `replayApproved = true` |
-| Missing `consumerId` | Set `UNKNOWN_CONSUMER` |
-| Missing `idempotencyKey` | Continue with empty value |
 
-The script must not throw exceptions for replay ineligibility. It must set:
+## Step 4: Configure Eligible Route
 
-| Property | Value |
-| --- | --- |
-| `replayEligible` | `true` or `false` |
-| `replayRejectionReason` | Required when `replayEligible = false` |
+- `GS_ExtractOriginalPayloadFromDlq`
+- Optional safety Router if `replayEligible` changed during extraction
+- `CM_PrepareRequeueToInbound`
+- Optional `GS_SetMplCustomHeaders` or `GS_LogBeforeJms`
+- JMS Receiver `JMS_SO_INBOUND`
 
-## Step 4: Add Router
+`GS_ExtractOriginalPayloadFromDlq` increments `replayCount` by 1 when publishing back to `JMS_SO_INBOUND`.
 
-| Route | Condition |
-| --- | --- |
-| Eligible | `${property.replayEligible} = 'true'` |
-| Rejected | `${property.replayEligible} != 'true'` |
+## Step 5: Configure Rejected Route
 
-## Step 5: Configure Eligible Route
+- `GS_PrepareReplayRejectedPayload`
+- `CM_SetReplayRejectedHeaders`
+- Optional `GS_SetMplCustomHeaders` or `GS_LogBeforeJms`
+- JMS Receiver `REJECTED_REPLAY_SO_INBOUND`
 
-### Add `GS_ExtractOriginalPayloadFromDlq`
+Messages without `replayApproved = true`, messages with missing `originalPayload`, and messages that exceed `maxReplayCount` must go to `REJECTED_REPLAY_SO_INBOUND`.
 
-| Setting | Value |
-| --- | --- |
-| Component | Groovy Script |
-| Script File | `scripts/GS_ExtractOriginalPayloadFromDlq.groovy` |
-| Purpose | Replace body with `originalPayload` only |
-| Payload Mutation | No Sales Order field modification allowed |
+## MPL Custom Headers
 
-### Add `CM_PrepareRequeueToInbound`
+Reprocess custom headers:
 
-| Setting | Value |
-| --- | --- |
-| Component | Content Modifier |
-| Name | `CM_PrepareRequeueToInbound` |
-| Purpose | Set JMS headers and replay metadata before requeue |
+- `ConsumerID`
+- `correlationId`
+- `IdempotencyKey`
+- `processingStatus`
+- `replayEligible`
+- `replayCount`
+- `maxReplayCount`
+- `replayTarget`
+- `replayRejectionCode`
+- `sapResponseStatusCode`
+- `validationStatus` when inherited
 
-### Configure JMS Receiver
+`GS_LogBeforeJms` or `GS_SetMplCustomHeaders` must only add custom header properties when values exist. Do not write empty custom header values.
 
-| Setting | Value |
-| --- | --- |
-| Component | JMS Receiver |
-| Adapter Type | JMS |
-| Queue Name | `JMS_SO_INBOUND` |
-| Access Type | Non-Exclusive |
-| Body | Original Sales Order JSON payload |
-| Transfer Exchange Properties | Enabled when available |
-
-## Step 6: Configure Rejected Route
-
-### Add `GS_PrepareReplayRejectedPayload`
-
-| Setting | Value |
-| --- | --- |
-| Component | Groovy Script |
-| Script File | `scripts/GS_PrepareReplayRejectedPayload.groovy` |
-| Purpose | Preserve original DLQ envelope and add rejection metadata |
-| Payload Logging | Not allowed |
-
-### Add `CM_SetReplayRejectedHeaders`
-
-| Setting | Value |
-| --- | --- |
-| Component | Content Modifier |
-| Name | `CM_SetReplayRejectedHeaders` |
-| Purpose | Set headers/properties before routing to replay rejection queue |
-
-### Configure JMS Receiver
-
-| Setting | Value |
-| --- | --- |
-| Component | JMS Receiver |
-| Adapter Type | JMS |
-| Queue Name | `REJECTED_REPLAY_SO_INBOUND` |
-| Access Type | Non-Exclusive |
-| Body | Replay rejection JSON envelope |
-| Transfer Exchange Properties | Enabled when available |
-
-## Step 7: Configure Monitoring
-
-| Field | Source |
-| --- | --- |
-| `correlationId` | Exchange Property |
-| `consumerId` | Exchange Property |
-| `idempotencyKey` | Exchange Property |
-| `replayEligible` | Exchange Property |
-| `replayRejectionReason` | Exchange Property |
-| `replayed` | Exchange Property/Header |
-| `replayedAt` | Exchange Property/Header |
-| `replayRejected` | Exchange Property/Header |
-| `replayRejectedAt` | Exchange Property/Header |
-| `replaySource` | Exchange Property/Header |
-| `replayTarget` | Exchange Property/Header |
-| `replayFlow` | Exchange Property/Header |
-| `replayCount` | Exchange Property/Header |
-| `processingStatus` | Exchange Property |
-
-Do not add payload body to MPL custom properties.
-
-## Step 8: Deployment Checklist
-
-- [ ] iFlow deployed successfully.
-- [ ] iFlow is stopped after deployment.
-- [ ] JMS Sender queue is `DLQ_SO_INBOUND`.
-- [ ] Router uses `replayEligible` property.
-- [ ] Eligible route publishes to `JMS_SO_INBOUND`.
-- [ ] Rejected route publishes to `REJECTED_REPLAY_SO_INBOUND`.
-- [ ] Scripts are assigned in the correct sequence.
-- [ ] Content Modifiers use `Create` actions only.
-- [ ] Payload logging is disabled.
-- [ ] Operations replay procedure is documented.
-
-## Step 9: Manual Replay Procedure
+## Manual Replay Procedure
 
 1. Review the DLQ envelope in JMS monitoring.
 2. Confirm root cause is resolved.
@@ -201,10 +144,10 @@ Do not add payload body to MPL custom properties.
 5. For `SAP_BUSINESS_ERROR`, set `businessCorrectionConfirmed = true` only after business/master data correction.
 6. For `VALIDATION_ERROR`, set `validationReplayApproved = true` only when replay is explicitly approved.
 7. Confirm idempotency and duplicate-processing review is complete.
-8. Start `IFL_SO_REPROCESS_DLQ` manually.
+8. Deploy `IFL_SO_REPROCESS_DLQ` manually.
 9. Monitor eligible messages on `JMS_SO_INBOUND`.
 10. Monitor rejected messages on `REJECTED_REPLAY_SO_INBOUND`.
-11. Stop `IFL_SO_REPROCESS_DLQ` immediately after replay window.
+11. Undeploy `IFL_SO_REPROCESS_DLQ` immediately after replay completion.
 
 ## Expected Result
 
