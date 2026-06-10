@@ -1,0 +1,16 @@
+{
+    "externalOrderId": "PORTAL-ORDER-001",
+    "sourceSystem": "SALES_REP_PORTAL",
+    "soldToParty": "10000001",
+    "shipToParty": "10000001",
+    "purchaseOrderByCustomer": "PO-10001",
+    "requestedDeliveryDate": "2026-06-15",
+    "currency": "USD",
+    "items": [{
+          "lineNumber": "10",
+          "material": "MAT-1000",
+          "quantity": 2,
+          "unitOfMeasure": "EA",
+          "plant": "1000"
+    }]
+}

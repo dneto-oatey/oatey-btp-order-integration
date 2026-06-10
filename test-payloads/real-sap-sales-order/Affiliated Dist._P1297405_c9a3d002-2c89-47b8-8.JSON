@@ -1,0 +1,646 @@
+{
+  "SalesOrderType": "ZOR",
+  "SalesOrganization": "1201",
+  "DistributionChannel": "10",
+  "OrganizationDivision": "00",
+  "SoldToParty": "0001011417",
+  "PurchaseOrderByCustomer": "P1297405",
+  "CustomerPurchaseOrderType": "EDI",
+  "CustomerPurchaseOrderDate": "2025-04-16T00:00:00",
+  "SalesOrderDate": "2025-04-16T00:00:00",
+  "PricingDate": "2025-04-16T00:00:00",
+  "RequestedDeliveryDate": "2025-04-18T00:00:00",
+  "IncotermsClassification": "PPD",
+  "to_Item": {
+    "results": [
+      {
+        "UnderlyingPurchaseOrderItem": "1",
+        "Material": "31135",
+        "MaterialByCustomer": "35420",
+        "PricingDate": "2025-04-16T00:00:00",
+        "RequestedQuantity": "6",
+        "RequestedQuantityUnit": "EA",
+        "ZZ1_OriginalOrderQuant_SDI": "6",
+        "ZZ1_OriginalOrderQuant_SDIU": "EA",
+        "to_PricingElement": {
+          "results": [
+            {
+              "ConditionType": "EDI1",
+              "ConditionQuantity": "10",
+              "ConditionRateValue": "634",
+              "ConditionCurrency": "USD"
+            }
+          ]
+        }
+      },
+      {
+        "UnderlyingPurchaseOrderItem": "3",
+        "Material": "38532",
+        "MaterialByCustomer": "248735",
+        "PricingDate": "2025-04-16T00:00:00",
+        "RequestedQuantity": "12",
+        "RequestedQuantityUnit": "EA",
+        "ZZ1_OriginalOrderQuant_SDI": "12",
+        "ZZ1_OriginalOrderQuant_SDIU": "EA",
+        "to_PricingElement": {
+          "results": [
+            {
+              "ConditionType": "EDI1",
+              "ConditionQuantity": "10",
+              "ConditionRateValue": "283.5",
+              "ConditionCurrency": "USD"
+            }
+          ]
+        }
+      },
+      {
+        "UnderlyingPurchaseOrderItem": "6",
+        "Material": "30236",
+        "MaterialByCustomer": "336294",
+        "PricingDate": "2025-04-16T00:00:00",
+        "RequestedQuantity": "48",
+        "RequestedQuantityUnit": "EA",
+        "ZZ1_OriginalOrderQuant_SDI": "48",
+        "ZZ1_OriginalOrderQuant_SDIU": "EA",
+        "to_PricingElement": {
+          "results": [
+            {
+              "ConditionType": "EDI1",
+              "ConditionQuantity": "10",
+              "ConditionRateValue": "57",
+              "ConditionCurrency": "USD"
+            }
+          ]
+        }
+      },
+      {
+        "UnderlyingPurchaseOrderItem": "7",
+        "Material": "30143",
+        "MaterialByCustomer": "35319",
+        "PricingDate": "2025-04-16T00:00:00",
+        "RequestedQuantity": "12",
+        "RequestedQuantityUnit": "EA",
+        "ZZ1_OriginalOrderQuant_SDI": "12",
+        "ZZ1_OriginalOrderQuant_SDIU": "EA",
+        "to_PricingElement": {
+          "results": [
+            {
+              "ConditionType": "EDI1",
+              "ConditionQuantity": "10",
+              "ConditionRateValue": "176.8",
+              "ConditionCurrency": "USD"
+            }
+          ]
+        }
+      },
+      {
+        "UnderlyingPurchaseOrderItem": "9",
+        "Material": "31166",
+        "MaterialByCustomer": "35398",
+        "PricingDate": "2025-04-16T00:00:00",
+        "RequestedQuantity": "24",
+        "RequestedQuantityUnit": "EA",
+        "ZZ1_OriginalOrderQuant_SDI": "24",
+        "ZZ1_OriginalOrderQuant_SDIU": "EA",
+        "to_PricingElement": {
+          "results": [
+            {
+              "ConditionType": "EDI1",
+              "ConditionQuantity": "10",
+              "ConditionRateValue": "16.2",
+              "ConditionCurrency": "USD"
+            }
+          ]
+        }
+      },
+      {
+        "UnderlyingPurchaseOrderItem": "10",
+        "Material": "30863",
+        "MaterialByCustomer": "35354",
+        "PricingDate": "2025-04-16T00:00:00",
+        "RequestedQuantity": "24",
+        "RequestedQuantityUnit": "EA",
+        "ZZ1_OriginalOrderQuant_SDI": "24",
+        "ZZ1_OriginalOrderQuant_SDIU": "EA",
+        "to_PricingElement": {
+          "results": [
+            {
+              "ConditionType": "EDI1",
+              "ConditionQuantity": "10",
+              "ConditionRateValue": "74.5",
+              "ConditionCurrency": "USD"
+            }
+          ]
+        }
+      },
+      {
+        "UnderlyingPurchaseOrderItem": "14",
+        "Material": "30041",
+        "MaterialByCustomer": "35323",
+        "PricingDate": "2025-04-16T00:00:00",
+        "RequestedQuantity": "36",
+        "RequestedQuantityUnit": "EA",
+        "ZZ1_OriginalOrderQuant_SDI": "36",
+        "ZZ1_OriginalOrderQuant_SDIU": "EA",
+        "to_PricingElement": {
+          "results": [
+            {
+              "ConditionType": "EDI1",
+              "ConditionQuantity": "10",
+              "ConditionRateValue": "53.4",
+              "ConditionCurrency": "USD"
+            }
+          ]
+        }
+      },
+      {
+        "UnderlyingPurchaseOrderItem": "15",
+        "Material": "30014",
+        "MaterialByCustomer": "35322",
+        "PricingDate": "2025-04-16T00:00:00",
+        "RequestedQuantity": "24",
+        "RequestedQuantityUnit": "EA",
+        "ZZ1_OriginalOrderQuant_SDI": "24",
+        "ZZ1_OriginalOrderQuant_SDIU": "EA",
+        "to_PricingElement": {
+          "results": [
+            {
+              "ConditionType": "EDI1",
+              "ConditionQuantity": "10",
+              "ConditionRateValue": "34.6",
+              "ConditionCurrency": "USD"
+            }
+          ]
+        }
+      },
+      {
+        "UnderlyingPurchaseOrderItem": "16",
+        "Material": "30212",
+        "MaterialByCustomer": "35328",
+        "PricingDate": "2025-04-16T00:00:00",
+        "RequestedQuantity": "8",
+        "RequestedQuantityUnit": "EA",
+        "ZZ1_OriginalOrderQuant_SDI": "8",
+        "ZZ1_OriginalOrderQuant_SDIU": "EA",
+        "to_PricingElement": {
+          "results": [
+            {
+              "ConditionType": "EDI1",
+              "ConditionQuantity": "10",
+              "ConditionRateValue": "169",
+              "ConditionCurrency": "USD"
+            }
+          ]
+        }
+      },
+      {
+        "UnderlyingPurchaseOrderItem": "17",
+        "Material": "31008",
+        "MaterialByCustomer": "35360",
+        "PricingDate": "2025-04-16T00:00:00",
+        "RequestedQuantity": "12",
+        "RequestedQuantityUnit": "EA",
+        "ZZ1_OriginalOrderQuant_SDI": "12",
+        "ZZ1_OriginalOrderQuant_SDIU": "EA",
+        "to_PricingElement": {
+          "results": [
+            {
+              "ConditionType": "EDI1",
+              "ConditionQuantity": "10",
+              "ConditionRateValue": "133.4",
+              "ConditionCurrency": "USD"
+            }
+          ]
+        }
+      },
+      {
+        "UnderlyingPurchaseOrderItem": "19",
+        "Material": "34063",
+        "MaterialByCustomer": "35384",
+        "PricingDate": "2025-04-16T00:00:00",
+        "RequestedQuantity": "48",
+        "RequestedQuantityUnit": "EA",
+        "ZZ1_OriginalOrderQuant_SDI": "48",
+        "ZZ1_OriginalOrderQuant_SDIU": "EA",
+        "to_PricingElement": {
+          "results": [
+            {
+              "ConditionType": "EDI1",
+              "ConditionQuantity": "10",
+              "ConditionRateValue": "65.5",
+              "ConditionCurrency": "USD"
+            }
+          ]
+        }
+      },
+      {
+        "UnderlyingPurchaseOrderItem": "22",
+        "Material": "43404",
+        "MaterialByCustomer": "433185",
+        "PricingDate": "2025-04-16T00:00:00",
+        "RequestedQuantity": "5",
+        "RequestedQuantityUnit": "EA",
+        "ZZ1_OriginalOrderQuant_SDI": "5",
+        "ZZ1_OriginalOrderQuant_SDIU": "EA",
+        "to_PricingElement": {
+          "results": [
+            {
+              "ConditionType": "EDI1",
+              "ConditionQuantity": "10",
+              "ConditionRateValue": "124.7",
+              "ConditionCurrency": "USD"
+            }
+          ]
+        }
+      },
+      {
+        "UnderlyingPurchaseOrderItem": "23",
+        "Material": "271047",
+        "MaterialByCustomer": "41016",
+        "PricingDate": "2025-04-16T00:00:00",
+        "RequestedQuantity": "3",
+        "RequestedQuantityUnit": "EA",
+        "ZZ1_OriginalOrderQuant_SDI": "3",
+        "ZZ1_OriginalOrderQuant_SDIU": "EA",
+        "to_PricingElement": {
+          "results": [
+            {
+              "ConditionType": "EDI1",
+              "ConditionQuantity": "10",
+              "ConditionRateValue": "791.8",
+              "ConditionCurrency": "USD"
+            }
+          ]
+        }
+      },
+      {
+        "UnderlyingPurchaseOrderItem": "29",
+        "Material": "20305",
+        "MaterialByCustomer": "34931",
+        "PricingDate": "2025-04-16T00:00:00",
+        "RequestedQuantity": "12",
+        "RequestedQuantityUnit": "EA",
+        "ZZ1_OriginalOrderQuant_SDI": "12",
+        "ZZ1_OriginalOrderQuant_SDIU": "EA",
+        "to_PricingElement": {
+          "results": [
+            {
+              "ConditionType": "EDI1",
+              "ConditionQuantity": "10",
+              "ConditionRateValue": "105.9",
+              "ConditionCurrency": "USD"
+            }
+          ]
+        }
+      },
+      {
+        "UnderlyingPurchaseOrderItem": "30",
+        "Material": "15427",
+        "MaterialByCustomer": "34918",
+        "PricingDate": "2025-04-16T00:00:00",
+        "RequestedQuantity": "12",
+        "RequestedQuantityUnit": "EA",
+        "ZZ1_OriginalOrderQuant_SDI": "12",
+        "ZZ1_OriginalOrderQuant_SDIU": "EA",
+        "to_PricingElement": {
+          "results": [
+            {
+              "ConditionType": "EDI1",
+              "ConditionQuantity": "10",
+              "ConditionRateValue": "59.1",
+              "ConditionCurrency": "USD"
+            }
+          ]
+        }
+      },
+      {
+        "UnderlyingPurchaseOrderItem": "33",
+        "Material": "31177",
+        "MaterialByCustomer": "333967",
+        "PricingDate": "2025-04-16T00:00:00",
+        "RequestedQuantity": "18",
+        "RequestedQuantityUnit": "EA",
+        "ZZ1_OriginalOrderQuant_SDI": "18",
+        "ZZ1_OriginalOrderQuant_SDIU": "EA",
+        "to_PricingElement": {
+          "results": [
+            {
+              "ConditionType": "EDI1",
+              "ConditionQuantity": "10",
+              "ConditionRateValue": "34",
+              "ConditionCurrency": "USD"
+            }
+          ]
+        }
+      },
+      {
+        "UnderlyingPurchaseOrderItem": "34",
+        "Material": "90220",
+        "MaterialByCustomer": "35010",
+        "PricingDate": "2025-04-16T00:00:00",
+        "RequestedQuantity": "192",
+        "RequestedQuantityUnit": "EA",
+        "ZZ1_OriginalOrderQuant_SDI": "192",
+        "ZZ1_OriginalOrderQuant_SDIU": "EA",
+        "to_PricingElement": {
+          "results": [
+            {
+              "ConditionType": "EDI1",
+              "ConditionQuantity": "10",
+              "ConditionRateValue": "13.6",
+              "ConditionCurrency": "USD"
+            }
+          ]
+        }
+      },
+      {
+        "UnderlyingPurchaseOrderItem": "35",
+        "Material": "90124",
+        "MaterialByCustomer": "35008",
+        "PricingDate": "2025-04-16T00:00:00",
+        "RequestedQuantity": "100",
+        "RequestedQuantityUnit": "EA",
+        "ZZ1_OriginalOrderQuant_SDI": "100",
+        "ZZ1_OriginalOrderQuant_SDIU": "EA",
+        "to_PricingElement": {
+          "results": [
+            {
+              "ConditionType": "EDI1",
+              "ConditionQuantity": "10",
+              "ConditionRateValue": "26.8",
+              "ConditionCurrency": "USD"
+            }
+          ]
+        }
+      },
+      {
+        "UnderlyingPurchaseOrderItem": "36",
+        "Material": "90210",
+        "MaterialByCustomer": "35009",
+        "PricingDate": "2025-04-16T00:00:00",
+        "RequestedQuantity": "192",
+        "RequestedQuantityUnit": "EA",
+        "ZZ1_OriginalOrderQuant_SDI": "192",
+        "ZZ1_OriginalOrderQuant_SDIU": "EA",
+        "to_PricingElement": {
+          "results": [
+            {
+              "ConditionType": "EDI1",
+              "ConditionQuantity": "10",
+              "ConditionRateValue": "10.4",
+              "ConditionCurrency": "USD"
+            }
+          ]
+        }
+      },
+      {
+        "UnderlyingPurchaseOrderItem": "39",
+        "Material": "760-1",
+        "MaterialByCustomer": "283971",
+        "PricingDate": "2025-04-16T00:00:00",
+        "RequestedQuantity": "25",
+        "RequestedQuantityUnit": "EA",
+        "ZZ1_OriginalOrderQuant_SDI": "25",
+        "ZZ1_OriginalOrderQuant_SDIU": "EA",
+        "to_PricingElement": {
+          "results": [
+            {
+              "ConditionType": "EDI1",
+              "ConditionQuantity": "10",
+              "ConditionRateValue": "108.7",
+              "ConditionCurrency": "USD"
+            }
+          ]
+        }
+      },
+      {
+        "UnderlyingPurchaseOrderItem": "41",
+        "Material": "P9793E",
+        "MaterialByCustomer": "312696",
+        "PricingDate": "2025-04-16T00:00:00",
+        "RequestedQuantity": "75",
+        "RequestedQuantityUnit": "EA",
+        "ZZ1_OriginalOrderQuant_SDI": "75",
+        "ZZ1_OriginalOrderQuant_SDIU": "EA",
+        "to_PricingElement": {
+          "results": [
+            {
+              "ConditionType": "EDI1",
+              "ConditionQuantity": "10",
+              "ConditionRateValue": "13.9",
+              "ConditionCurrency": "USD"
+            }
+          ]
+        }
+      },
+      {
+        "UnderlyingPurchaseOrderItem": "42",
+        "Material": "P9100TB",
+        "MaterialByCustomer": "485262",
+        "PricingDate": "2025-04-16T00:00:00",
+        "RequestedQuantity": "25",
+        "RequestedQuantityUnit": "EA",
+        "ZZ1_OriginalOrderQuant_SDI": "25",
+        "ZZ1_OriginalOrderQuant_SDIU": "EA",
+        "to_PricingElement": {
+          "results": [
+            {
+              "ConditionType": "EDI1",
+              "ConditionQuantity": "10",
+              "ConditionRateValue": "38.3",
+              "ConditionCurrency": "USD"
+            }
+          ]
+        }
+      },
+      {
+        "UnderlyingPurchaseOrderItem": "44",
+        "Material": "P9704BG",
+        "MaterialByCustomer": "201465",
+        "PricingDate": "2025-04-16T00:00:00",
+        "RequestedQuantity": "400",
+        "RequestedQuantityUnit": "EA",
+        "ZZ1_OriginalOrderQuant_SDI": "400",
+        "ZZ1_OriginalOrderQuant_SDIU": "EA",
+        "to_PricingElement": {
+          "results": [
+            {
+              "ConditionType": "EDI1",
+              "ConditionQuantity": "10",
+              "ConditionRateValue": "11.3",
+              "ConditionCurrency": "USD"
+            }
+          ]
+        }
+      },
+      {
+        "UnderlyingPurchaseOrderItem": "45",
+        "Material": "2000001171",
+        "MaterialByCustomer": "30625",
+        "PricingDate": "2025-04-16T00:00:00",
+        "RequestedQuantity": "24",
+        "RequestedQuantityUnit": "EA",
+        "ZZ1_OriginalOrderQuant_SDI": "24",
+        "ZZ1_OriginalOrderQuant_SDIU": "EA",
+        "to_PricingElement": {
+          "results": [
+            {
+              "ConditionType": "EDI1",
+              "ConditionQuantity": "10",
+              "ConditionRateValue": "40.5",
+              "ConditionCurrency": "USD"
+            }
+          ]
+        }
+      },
+      {
+        "UnderlyingPurchaseOrderItem": "48",
+        "Material": "701-1",
+        "MaterialByCustomer": "30357",
+        "PricingDate": "2025-04-16T00:00:00",
+        "RequestedQuantity": "100",
+        "RequestedQuantityUnit": "EA",
+        "ZZ1_OriginalOrderQuant_SDI": "100",
+        "ZZ1_OriginalOrderQuant_SDIU": "EA",
+        "to_PricingElement": {
+          "results": [
+            {
+              "ConditionType": "EDI1",
+              "ConditionQuantity": "10",
+              "ConditionRateValue": "172.3",
+              "ConditionCurrency": "USD"
+            }
+          ]
+        }
+      },
+      {
+        "UnderlyingPurchaseOrderItem": "49",
+        "Material": "791A-1",
+        "MaterialByCustomer": "30396",
+        "PricingDate": "2025-04-16T00:00:00",
+        "RequestedQuantity": "10",
+        "RequestedQuantityUnit": "EA",
+        "ZZ1_OriginalOrderQuant_SDI": "10",
+        "ZZ1_OriginalOrderQuant_SDIU": "EA",
+        "to_PricingElement": {
+          "results": [
+            {
+              "ConditionType": "EDI1",
+              "ConditionQuantity": "10",
+              "ConditionRateValue": "84.1",
+              "ConditionCurrency": "USD"
+            }
+          ]
+        }
+      },
+      {
+        "UnderlyingPurchaseOrderItem": "50",
+        "Material": "710-1",
+        "MaterialByCustomer": "30365",
+        "PricingDate": "2025-04-16T00:00:00",
+        "RequestedQuantity": "60",
+        "RequestedQuantityUnit": "EA",
+        "ZZ1_OriginalOrderQuant_SDI": "60",
+        "ZZ1_OriginalOrderQuant_SDIU": "EA",
+        "to_PricingElement": {
+          "results": [
+            {
+              "ConditionType": "EDI1",
+              "ConditionQuantity": "10",
+              "ConditionRateValue": "285.6",
+              "ConditionCurrency": "USD"
+            }
+          ]
+        }
+      },
+      {
+        "UnderlyingPurchaseOrderItem": "51",
+        "Material": "P9701BG",
+        "MaterialByCustomer": "250926",
+        "PricingDate": "2025-04-16T00:00:00",
+        "RequestedQuantity": "50",
+        "RequestedQuantityUnit": "EA",
+        "ZZ1_OriginalOrderQuant_SDI": "50",
+        "ZZ1_OriginalOrderQuant_SDIU": "EA",
+        "to_PricingElement": {
+          "results": [
+            {
+              "ConditionType": "EDI1",
+              "ConditionQuantity": "10",
+              "ConditionRateValue": "12.4",
+              "ConditionCurrency": "USD"
+            }
+          ]
+        }
+      },
+      {
+        "UnderlyingPurchaseOrderItem": "52",
+        "Material": "P8227BG",
+        "MaterialByCustomer": "353608",
+        "PricingDate": "2025-04-16T00:00:00",
+        "RequestedQuantity": "20",
+        "RequestedQuantityUnit": "EA",
+        "ZZ1_OriginalOrderQuant_SDI": "20",
+        "ZZ1_OriginalOrderQuant_SDIU": "EA",
+        "to_PricingElement": {
+          "results": [
+            {
+              "ConditionType": "EDI1",
+              "ConditionQuantity": "10",
+              "ConditionRateValue": "110",
+              "ConditionCurrency": "USD"
+            }
+          ]
+        }
+      },
+      {
+        "UnderlyingPurchaseOrderItem": "53",
+        "Material": "822-1",
+        "MaterialByCustomer": "30421",
+        "PricingDate": "2025-04-16T00:00:00",
+        "RequestedQuantity": "30",
+        "RequestedQuantityUnit": "EA",
+        "ZZ1_OriginalOrderQuant_SDI": "30",
+        "ZZ1_OriginalOrderQuant_SDIU": "EA",
+        "to_PricingElement": {
+          "results": [
+            {
+              "ConditionType": "EDI1",
+              "ConditionQuantity": "10",
+              "ConditionRateValue": "77.4",
+              "ConditionCurrency": "USD"
+            }
+          ]
+        }
+      },
+      {
+        "UnderlyingPurchaseOrderItem": "56",
+        "Material": "137301",
+        "MaterialByCustomer": "487360",
+        "PricingDate": "2025-04-16T00:00:00",
+        "RequestedQuantity": "12",
+        "RequestedQuantityUnit": "EA",
+        "ZZ1_OriginalOrderQuant_SDI": "12",
+        "ZZ1_OriginalOrderQuant_SDIU": "EA",
+        "to_PricingElement": {
+          "results": [
+            {
+              "ConditionType": "EDI1",
+              "ConditionQuantity": "10",
+              "ConditionRateValue": "104.5",
+              "ConditionCurrency": "USD"
+            }
+          ]
+        }
+      }
+    ]
+  },
+  "to_Text": {
+    "results": [
+      {
+        "LongTextID": "Z015",
+        "LongText": "Purchase Order Note TEXT FFA REFERENCE OUR PO# ON ALL DOCUMENTS. .. RECEIVING HOURS: 8AM-1PM M-F ..  PLEASE CALL 24HRS IN ADVANCE FOR DELIVERY APPOINTMENT OF 3+ SKIDS COLUMBUS RECEI VING: (614) 445-1000 ... Advise your AR Dept.: The invoice for this PO will be p aid through AD."
+      }
+    ]
+  }
+}

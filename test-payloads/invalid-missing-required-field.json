@@ -1,0 +1,11 @@
+{
+    "externalOrderId": "EDI-ORDER-MISSING-SOLD-TO",
+    "sourceSystem": "EDI_TRANSLATOR",
+    "currency": "USD",
+    "items": [{
+          "lineNumber": "10",
+          "material": "MAT-1000",
+          "quantity": 2,
+          "unitOfMeasure": "EA"
+    }]
+}

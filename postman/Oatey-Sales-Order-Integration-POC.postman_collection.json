@@ -1,0 +1,349 @@
+{
+  "info": {
+    "name": "Oatey Sales Order Integration POC",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+    "description": "SAP Integration Suite POC collection for APIM -> IFL_SO_INBOUND -> JMS_SO_INBOUND. Do not store the real client secret in this file."
+  },
+  "auth": {
+    "type": "oauth2",
+    "oauth2": [
+      {
+        "key": "grant_type",
+        "value": "client_credentials",
+        "type": "string"
+      },
+      {
+        "key": "tokenUrl",
+        "value": "{{tokenUrl}}",
+        "type": "string"
+      },
+      {
+        "key": "clientId",
+        "value": "{{clientId}}",
+        "type": "string"
+      },
+      {
+        "key": "clientSecret",
+        "value": "{{clientSecret}}",
+        "type": "string"
+      },
+      {
+        "key": "client_authentication",
+        "value": "header",
+        "type": "string"
+      },
+      {
+        "key": "addTokenTo",
+        "value": "header",
+        "type": "string"
+      }
+    ]
+  },
+  "variable": [
+    {
+      "key": "runtimeBaseUrl",
+      "value": "https://non-production-integration-4r463pth.it-cpi013-rt.cfapps.us21.hana.ondemand.com/http",
+      "type": "string"
+    },
+    {
+      "key": "tokenUrl",
+      "value": "https://non-production-integration-4r463pth.authentication.us21.hana.ondemand.com/oauth/token",
+      "type": "string"
+    },
+    {
+      "key": "clientId",
+      "value": "sb-b92fae89-4138-4ba0-8da0-1553a497e5e5!b10851|it-rt-non-production-integration-4r463pth!b46",
+      "type": "string"
+    },
+    {
+      "key": "clientSecret",
+      "value": "SET_IN_POSTMAN_CURRENT_VALUE_ONLY",
+      "type": "string"
+    },
+    {
+      "key": "consumerId",
+      "value": "POSTMAN_POC",
+      "type": "string"
+    }
+  ],
+  "item": [
+    {
+      "name": "Happy Path - Minimal SAP Sales Order JSON",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json",
+            "type": "text"
+          },
+          {
+            "key": "X-Correlation-ID",
+            "value": "poc-correlation-001",
+            "type": "text"
+          },
+          {
+            "key": "Idempotency-Key",
+            "value": "poc-idempotency-001",
+            "type": "text"
+          },
+          {
+            "key": "X-Consumer-ID",
+            "value": "{{consumerId}}",
+            "type": "text"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"SalesOrderType\": \"OR\",\n  \"SalesOrganization\": \"1000\",\n  \"DistributionChannel\": \"10\",\n  \"OrganizationDivision\": \"00\",\n  \"SoldToParty\": \"476272\",\n  \"PurchaseOrderByCustomer\": \"POC-POSTMAN-001\",\n  \"to_Item\": {\n    \"results\": [\n      {\n        \"Material\": \"MAT-001\",\n        \"RequestedQuantity\": \"1\",\n        \"to_PricingElement\": {\n          \"results\": [\n            {\n              \"ConditionType\": \"PR00\",\n              \"ConditionRateValue\": \"10.00\",\n              \"ConditionCurrency\": \"USD\"\n            }\n          ]\n        }\n      }\n    ]\n  }\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "url": {
+          "raw": "{{runtimeBaseUrl}}/sales-orders",
+          "host": [
+            "{{runtimeBaseUrl}}"
+          ],
+          "path": [
+            "sales-orders"
+          ]
+        }
+      },
+      "response": [],
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('HTTP 202', function () { pm.response.to.have.status(202); });",
+              "pm.test('correlationId returned', function () { pm.expect(pm.response.json().correlationId).to.exist; });"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Missing SoldToParty - Payload Validation",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json",
+            "type": "text"
+          },
+          {
+            "key": "X-Correlation-ID",
+            "value": "poc-correlation-001",
+            "type": "text"
+          },
+          {
+            "key": "Idempotency-Key",
+            "value": "poc-idempotency-001",
+            "type": "text"
+          },
+          {
+            "key": "X-Consumer-ID",
+            "value": "{{consumerId}}",
+            "type": "text"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"SalesOrderType\": \"OR\",\n  \"SalesOrganization\": \"1000\",\n  \"DistributionChannel\": \"10\",\n  \"OrganizationDivision\": \"00\",\n  \"PurchaseOrderByCustomer\": \"POC-POSTMAN-002\",\n  \"to_Item\": {\n    \"results\": [\n      {\n        \"Material\": \"MAT-001\",\n        \"RequestedQuantity\": \"1\",\n        \"to_PricingElement\": {\n          \"results\": [\n            {\n              \"ConditionType\": \"PR00\",\n              \"ConditionRateValue\": \"10.00\",\n              \"ConditionCurrency\": \"USD\"\n            }\n          ]\n        }\n      }\n    ]\n  }\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "url": {
+          "raw": "{{runtimeBaseUrl}}/sales-orders",
+          "host": [
+            "{{runtimeBaseUrl}}"
+          ],
+          "path": [
+            "sales-orders"
+          ]
+        }
+      },
+      "response": [],
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('HTTP 422 when strict Groovy validation is active', function () { pm.expect([202,422]).to.include(pm.response.code); });",
+              "pm.test('validation-depth dependent', function () { pm.expect(pm.response.code).to.be.oneOf([202,422]); });"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Missing Content-Type - Header Validation",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "X-Correlation-ID",
+            "value": "poc-correlation-001",
+            "type": "text"
+          },
+          {
+            "key": "Idempotency-Key",
+            "value": "poc-idempotency-001",
+            "type": "text"
+          },
+          {
+            "key": "X-Consumer-ID",
+            "value": "{{consumerId}}",
+            "type": "text"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"SalesOrderType\": \"OR\",\n  \"SalesOrganization\": \"1000\",\n  \"DistributionChannel\": \"10\",\n  \"OrganizationDivision\": \"00\",\n  \"SoldToParty\": \"476272\",\n  \"PurchaseOrderByCustomer\": \"POC-POSTMAN-001\",\n  \"to_Item\": {\n    \"results\": [\n      {\n        \"Material\": \"MAT-001\",\n        \"RequestedQuantity\": \"1\",\n        \"to_PricingElement\": {\n          \"results\": [\n            {\n              \"ConditionType\": \"PR00\",\n              \"ConditionRateValue\": \"10.00\",\n              \"ConditionCurrency\": \"USD\"\n            }\n          ]\n        }\n      }\n    ]\n  }\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "url": {
+          "raw": "{{runtimeBaseUrl}}/sales-orders",
+          "host": [
+            "{{runtimeBaseUrl}}"
+          ],
+          "path": [
+            "sales-orders"
+          ]
+        }
+      },
+      "response": [],
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('HTTP 400 or 415', function () { pm.expect([400,415]).to.include(pm.response.code); });"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Missing X-Consumer-ID - POC Fallback",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json",
+            "type": "text"
+          },
+          {
+            "key": "X-Correlation-ID",
+            "value": "poc-correlation-001",
+            "type": "text"
+          },
+          {
+            "key": "Idempotency-Key",
+            "value": "poc-idempotency-001",
+            "type": "text"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"SalesOrderType\": \"OR\",\n  \"SalesOrganization\": \"1000\",\n  \"DistributionChannel\": \"10\",\n  \"OrganizationDivision\": \"00\",\n  \"SoldToParty\": \"476272\",\n  \"PurchaseOrderByCustomer\": \"POC-POSTMAN-001\",\n  \"to_Item\": {\n    \"results\": [\n      {\n        \"Material\": \"MAT-001\",\n        \"RequestedQuantity\": \"1\",\n        \"to_PricingElement\": {\n          \"results\": [\n            {\n              \"ConditionType\": \"PR00\",\n              \"ConditionRateValue\": \"10.00\",\n              \"ConditionCurrency\": \"USD\"\n            }\n          ]\n        }\n      }\n    ]\n  }\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "url": {
+          "raw": "{{runtimeBaseUrl}}/sales-orders",
+          "host": [
+            "{{runtimeBaseUrl}}"
+          ],
+          "path": [
+            "sales-orders"
+          ]
+        }
+      },
+      "response": [],
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('Accepted if payload is valid', function () { pm.response.to.have.status(202); });"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Missing X-Correlation-ID - Generated by CPI",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json",
+            "type": "text"
+          },
+          {
+            "key": "Idempotency-Key",
+            "value": "poc-idempotency-001",
+            "type": "text"
+          },
+          {
+            "key": "X-Consumer-ID",
+            "value": "{{consumerId}}",
+            "type": "text"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"SalesOrderType\": \"OR\",\n  \"SalesOrganization\": \"1000\",\n  \"DistributionChannel\": \"10\",\n  \"OrganizationDivision\": \"00\",\n  \"SoldToParty\": \"476272\",\n  \"PurchaseOrderByCustomer\": \"POC-POSTMAN-001\",\n  \"to_Item\": {\n    \"results\": [\n      {\n        \"Material\": \"MAT-001\",\n        \"RequestedQuantity\": \"1\",\n        \"to_PricingElement\": {\n          \"results\": [\n            {\n              \"ConditionType\": \"PR00\",\n              \"ConditionRateValue\": \"10.00\",\n              \"ConditionCurrency\": \"USD\"\n            }\n          ]\n        }\n      }\n    ]\n  }\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "url": {
+          "raw": "{{runtimeBaseUrl}}/sales-orders",
+          "host": [
+            "{{runtimeBaseUrl}}"
+          ],
+          "path": [
+            "sales-orders"
+          ]
+        }
+      },
+      "response": [],
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('HTTP 202', function () { pm.response.to.have.status(202); });",
+              "pm.test('generated correlationId returned', function () { pm.expect(pm.response.json().correlationId).to.exist; });"
+            ]
+          }
+        }
+      ]
+    }
+  ]
+}

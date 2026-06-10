@@ -1,0 +1,11 @@
+{
+    "correlationId": "22222222-2222-4222-8222-222222222222",
+    "status": "FAILED",
+    "consumerId": "EDI_TRANSLATOR",
+    "processingTimestamp": "2026-06-01T15:05:00Z",
+    "errors": [{
+          "code": "CUSTOMER_NOT_FOUND",
+          "field": "soldToParty",
+          "message": "Customer was not found in SAP S/4HANA."
+    }]
+}

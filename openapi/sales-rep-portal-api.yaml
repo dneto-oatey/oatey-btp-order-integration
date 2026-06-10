@@ -1,0 +1,6 @@
+openapi: 3.0.3
+info: { title: Oatey Sales Rep Portal Sales Order API, version: 1.0.0, description: Synchronous APIM proxy routed directly to the standard SAP Sales Order API. }
+servers: [ { url: https://api.oatey.example.com/api/v1/portal } ]
+paths: { /sales-orders: { post: { summary: Create a sales order synchronously, operationId: createPortalSalesOrder, parameters: [ { name: X-Correlation-ID, in: header, required: false, schema: { type: string, format: uuid } }, { name: Idempotency-Key, in: header, required: true, schema: { type: string } } ], requestBody: { required: true, content: { application/json: { schema: { $ref: './schemas/sales-order-request.json' } } } }, responses: { '200': { description: Immediate SAP Sales Order API response }, '400': { description: Validation failure }, '401': { description: Unauthorized }, '403': { description: Forbidden }, '429': { description: Too Many Requests }, '500': { description: Technical failure } } } } }
+components: { securitySchemes: { OAuth2: { type: oauth2, flows: { clientCredentials: { tokenUrl: https://auth.oatey.example.com/oauth/token, scopes: { salesorder.write: Create sales orders } } } } } }
+security: [ { OAuth2: [ salesorder.write ] } ]
